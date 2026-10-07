@@ -16,7 +16,7 @@ import {
   ILiveActivityState,
 } from "./liveActivityState";
 import { INativeEffect } from "../models/nativeEffects";
-import { Subscriptions_hasSubscription } from "./subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { UrlUtils_build } from "./url";
 
 declare const __HOST__: string;
@@ -143,7 +143,7 @@ export function LiveActivityManager_updateLiveActivity(
   settings: ISettings,
   subscription?: ISubscription
 ): void {
-  if (!subscription || !Subscriptions_hasSubscription(subscription)) {
+  if (!Capabilities_hasLocal("notifications")) {
     return;
   }
   let liveActivityEntry = LiveActivityManager_getLiveActivityEntry(
@@ -223,8 +223,12 @@ export function LiveActivityManager_updateLiveActivityForNextEntry(
   mode: "workout" | "warmup",
   programExercise: IPlannerProgramExercise | undefined,
   settings: ISettings,
-  subscription?: ISubscription
+  subscription?: ISubscription,
+  isPlayground: boolean = false
 ): void {
+  if (isPlayground) {
+    return;
+  }
   const currentEntry = progress.entries[entryIndex];
   if (!currentEntry) {
     return;

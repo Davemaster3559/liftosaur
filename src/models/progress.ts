@@ -73,7 +73,7 @@ import {
   IProgramExerciseWarmupSet,
 } from "../types";
 import { INativeEffect } from "./nativeEffects";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { IPercentage, IScriptErrorHandler, ITimedSetSide } from "../types";
 import { TimedSet_open, TimedSet_recordedFor } from "./timedSet";
 import {
@@ -464,7 +464,7 @@ export function Progress_startTimer(
       timerSetIndex: undefined,
     };
   }
-  if (subscription && Subscriptions_hasSubscription(subscription)) {
+  if (Capabilities_hasLocal("notifications")) {
     // A backdated start (rest resumed after the screen was locked past the target) can already be overrun,
     // so only schedule the "rest is over" notification when there's still time left — UNTimeIntervalNotificationTrigger
     // aborts on a non-positive interval.
@@ -2322,7 +2322,7 @@ export function Progress_changeAmrapAction(
     newProgress,
     action.isPlayground,
     settings.timers.reminder,
-    subscription != null && Subscriptions_hasSubscription(subscription)
+    Capabilities_hasLocal("notifications")
   );
   LiveActivityManager_updateLiveActivityForNextEntry(
     effects,
@@ -2331,7 +2331,8 @@ export function Progress_changeAmrapAction(
     "workout",
     action.programExercise,
     settings,
-    subscription
+    subscription,
+    action.isPlayground
   );
   return { ...newProgress, amrapModal: undefined };
 }
@@ -2485,7 +2486,8 @@ export function Progress_completeSetAction(
       action.mode,
       action.programExercise,
       settings,
-      subscription
+      subscription,
+      action.isPlayground
     );
     return banked;
   }
@@ -2518,7 +2520,7 @@ export function Progress_completeSetAction(
       stopped,
       action.isPlayground,
       settings.timers.reminder,
-      subscription != null && Subscriptions_hasSubscription(subscription)
+      Capabilities_hasLocal("notifications")
     );
     LiveActivityManager_updateLiveActivityForNextEntry(
       effects,
@@ -2527,7 +2529,8 @@ export function Progress_completeSetAction(
       action.mode,
       action.programExercise,
       settings,
-      subscription
+      subscription,
+      action.isPlayground
     );
     return stopped;
   }
@@ -2579,7 +2582,8 @@ export function Progress_completeSetAction(
       action.mode,
       action.programExercise,
       settings,
-      subscription
+      subscription,
+      action.isPlayground
     );
     return newProgress;
   }
@@ -2647,7 +2651,7 @@ export function Progress_completeSetAction(
     newProgress,
     action.isPlayground,
     settings.timers.reminder,
-    subscription != null && Subscriptions_hasSubscription(subscription)
+    Capabilities_hasLocal("notifications")
   );
   LiveActivityManager_updateLiveActivityForNextEntry(
     effects,
@@ -2656,7 +2660,8 @@ export function Progress_completeSetAction(
     action.mode,
     action.programExercise,
     settings,
-    subscription
+    subscription,
+    action.isPlayground
   );
   // The pager scrolls only on a flip of this flag; the superset advance above moves currentEntryIndex
   // without one, and timed-set completions dispatch with the flag off, so the thumbnail moved while the

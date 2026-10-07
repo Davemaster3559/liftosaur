@@ -1,0 +1,69 @@
+name: DevFit Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [devfit, master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devfit-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DISABLE_OTA: "1"
+      TS_NODE_TRANSPILE_ONLY: "1"
+      NODE_OPTIONS: --max-old-space-size=3072
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install pinned JavaScript dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Prepare offline application assets
+        run: npm run devfit:prepare
+      - name: Check TypeScript
+        run: npm run check
+      - name: Verify training engine and personal capabilities
+        run: npm run test:devfit
+      - name: Install Android build components
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+      - name: Prepare public development signing key
+        run: node scripts/prepare-devfit-signing.cjs
+      - name: Build signed ARM64 APK with embedded JavaScript
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --max-workers=2
+      - name: Verify APK identity, signature and embedded bundle
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep "package: name='com.devfit.app'"
+          unzip -l "$APK" | grep 'assets/index.android.bundle'
+          mkdir -p dist/devfit
+          cp "$APK" "dist/devfit/DevFit-android-${GITHUB_SHA:0:8}.apk"
+          cd dist/devfit
+          sha256sum *.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DevFit-android-${{ github.sha }}
+          path: dist/devfit/
+          if-no-files-found: error
+          retention-days: 30

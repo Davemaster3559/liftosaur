@@ -114,6 +114,8 @@ import { getLatestMigrationVersion } from "../migrations/migrations";
 import { LogUtils_log } from "../utils/log";
 import { lg } from "../utils/posthog";
 import { RollbarUtils_config } from "../utils/rollbar";
+import { DevFitConfig } from "../devfit/config";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { UrlUtils_build } from "../utils/url";
 import { ImportFromLiftosaur_convertLiftosaurCsvToHistoryRecords } from "../utils/importFromLiftosaur";
 import { ImportFromHevy_convertHevyCsvToHistoryRecords } from "../utils/importFromHevy";
@@ -1336,7 +1338,7 @@ export function Thunk_pushScreen<T extends IScreen>(
     dispatch(Thunk_postevent("navigate-to-" + screen));
     if (
       ["musclesProgram", "musclesDay", "graphsList"].indexOf(screen) !== -1 &&
-      !Subscriptions_hasSubscription(getState().storage.subscription)
+      !Capabilities_hasLocal(screen === "graphsList" ? "graphs" : "muscles")
     ) {
       opts = { stack: "subscription" };
       screen = "subscription" as T;
@@ -2189,7 +2191,7 @@ export function Thunk_fetchInitial(): IThunk {
     }
     dispatch(Thunk_fetchPrograms());
     // A debug sandbox must not verify the target's subscription receipts or restore IAPs.
-    if (AdminDebug_isDebugAccountId(getState().storage.tempUserId)) {
+    if (!DevFitConfig.storeEnabled || AdminDebug_isDebugAccountId(getState().storage.tempUserId)) {
       return;
     }
     dispatch(Thunk_verifySubscriptionKey());

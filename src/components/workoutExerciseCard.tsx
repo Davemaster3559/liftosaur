@@ -35,7 +35,7 @@ import { WorkoutHints_recordUseInState } from "../utils/workoutHintsDispatch";
 import { IWorkoutExerciseSetsExpansion } from "./workoutExerciseAllSets";
 import { CollectionUtils_removeAt } from "../utils/collection";
 import { IconCog2 } from "./icons/iconCog2";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { Thunk_pushExerciseStatsScreen, Thunk_pushToEditProgramExercise } from "../ducks/thunks";
 import { WorkoutExerciseAllSets } from "./workoutExerciseAllSets";
 import {
@@ -337,7 +337,7 @@ function WorkoutExerciseCardInner(props: IWorkoutExerciseCardProps): JSX.Element
         .p("workoutSettings")
         .p("targetType")
         .recordModify((type) =>
-          Settings_getNextTargetType(type, !Subscriptions_hasSubscription(subscription) || !currentEquipmentName)
+          Settings_getNextTargetType(type, !Capabilities_hasLocal("plates") || !currentEquipmentName)
         ),
       "Change target type"
     );

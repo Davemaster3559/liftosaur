@@ -1,12 +1,12 @@
 import "../global.css";
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { ActivityIndicator, AppState, InteractionManager, Linking, NativeModules, Platform, View } from "react-native";
-import { Client as RollbarClient } from "rollbar-react-native";
-import RB from "rollbar";
+import { ActivityIndicator, AppState, InteractionManager, Linking, Platform, View } from "react-native";
+import type RB from "rollbar";
 import { Analytics_initialize, Analytics_setUserId } from "./utils/analytics";
 import { RollbarUtils_config } from "./utils/rollbar";
-import { AppAttribution_get } from "./utils/appAttribution";
-import { Ota_init, Ota_activeBundleIdSync } from "./utils/ota";
+import { Ota_init } from "./utils/ota";
+import { DevFitConfig } from "./devfit/config";
+import { DevFit_installDiagnostics } from "./devfit/telemetry";
 import { RN_COMMIT_HASH, RN_FULL_COMMIT_HASH } from "./rnBuildInfo";
 import { localdomain, localapidomain, localport, localapiport } from "./localdomain";
 
@@ -39,100 +39,7 @@ globalAny.__ENV__ = Platform.OS === "ios" ? "ios-rn" : "android-rn";
 globalAny.__COMMIT_HASH__ = RN_COMMIT_HASH;
 globalAny.__FULL_COMMIT_HASH__ = RN_FULL_COMMIT_HASH;
 
-interface IRollbarFrame {
-  filename?: string;
-}
-interface IRollbarPayload {
-  body?: {
-    trace?: { frames?: IRollbarFrame[] };
-    trace_chain?: { frames?: IRollbarFrame[] }[];
-  };
-}
-
-// Rollbar source-map matching: sourcemaps are uploaded as bundle/<updateId>-<platform>.js
-// (see scripts/uploadRnSourcemaps.sh). Rewrite any frame whose filename looks like our
-// JS bundle to that canonical URL. Falls back to "embedded" when no OTA bundle is active.
-const BUNDLE_FRAME_PATTERN = /main\.jsbundle|index\.android\.bundle|\/updates\/[^/]+\/[^/]+\/[^/]+\//;
-
-function rewriteRollbarFrames(payload: IRollbarPayload): void {
-  const updateId = Ota_activeBundleIdSync() ?? "embedded";
-  const canonical = `https://www.liftosaur.com/bundle/${updateId}-${Platform.OS}.js`;
-  const traces = [payload?.body?.trace, ...(payload?.body?.trace_chain ?? [])];
-  for (const trace of traces) {
-    const frames = trace?.frames;
-    if (!Array.isArray(frames)) {
-      continue;
-    }
-    for (const f of frames) {
-      if (typeof f?.filename !== "string") {
-        continue;
-      }
-      if (!BUNDLE_FRAME_PATTERN.test(f.filename)) {
-        continue;
-      }
-      f.filename = canonical;
-    }
-  }
-}
-
-// JS-reported items don't pass through the native Rollbar SDKs, so mirror the
-// client.ios/client.android fields those SDKs attach to native crash reports.
-// rollbar-react-native builds the same attributes natively for its
-// captureDeviceInfo option, but nests them under client.os — fetch them
-// directly and place them at the path native crashes use.
-function rollbarClientAttribution(): Record<string, unknown> {
-  let device: Record<string, unknown> = {};
-  try {
-    const native = (NativeModules as { RollbarReactNative?: { deviceAttributes?: () => string } }).RollbarReactNative;
-    const raw = native?.deviceAttributes?.();
-    device = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-  } catch {
-    device = {};
-  }
-  if (Platform.OS === "ios") {
-    return { ios: device };
-  }
-  if (Platform.OS === "android") {
-    // deviceAttributes lacks version_code, which native crash reports do include
-    return { android: { ...device, version_code: AppAttribution_get().androidVersion } };
-  }
-  return {};
-}
-
-const rollbarClient = new RollbarClient({
-  accessToken: "f29180c0746c4922996ff41dfc2527d2",
-  captureUncaught: true,
-  captureUnhandledRejections: true,
-  payload: {
-    environment: Platform.OS === "ios" ? "ios-rn" : "android-rn",
-    client: {
-      javascript: {
-        source_map_enabled: true,
-        code_version: RN_FULL_COMMIT_HASH,
-        guess_uncaught_frames: true,
-      },
-      ...rollbarClientAttribution(),
-    },
-  },
-  transform: rewriteRollbarFrames,
-});
-
-const rollbarShim = {
-  error: (obj: unknown, extra?: unknown) => rollbarClient.error(obj as never, extra as never),
-  warning: (obj: unknown, extra?: unknown) => rollbarClient.warning(obj as never, extra as never),
-  warn: (obj: unknown, extra?: unknown) => rollbarClient.warning(obj as never, extra as never),
-  info: (obj: unknown, extra?: unknown) => rollbarClient.info(obj as never, extra as never),
-  debug: (obj: unknown, extra?: unknown) => rollbarClient.debug(obj as never, extra as never),
-  critical: (obj: unknown, extra?: unknown) => rollbarClient.critical(obj as never, extra as never),
-  log: (obj: unknown, extra?: unknown) => rollbarClient.log(obj as never, extra as never),
-  configure: (config: { payload?: { person?: { id?: string; email?: string; username?: string } } }) => {
-    const person = config?.payload?.person;
-    if (person?.id) {
-      rollbarClient.setPerson(person.id, person.username ?? null, person.email ?? null);
-    }
-  },
-};
-(globalThis as unknown as { Rollbar: unknown }).Rollbar = rollbarShim;
+DevFit_installDiagnostics();
 
 if (__DEV__) {
   const formatTime = (): string => {
@@ -245,7 +152,7 @@ import {
   PerfScorecard_setContextProvider,
 } from "./utils/perfScorecard";
 
-GoogleSignin.configure({
+if (DevFitConfig.officialCloudEnabled) GoogleSignin.configure({
   webClientId: "944666871420-p8kv124sgte8o0p6ev2ah6npudsl7e4f.apps.googleusercontent.com",
   iosClientId: "944666871420-of5rtcpja10vsp2jbe5m6amob7u5qvjq.apps.googleusercontent.com",
   offlineAccess: false,
@@ -300,9 +207,11 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
     dispatch(Thunk_sync2({ force: true }));
     dispatch(Thunk_fetchInitial());
     dispatch(Thunk_syncHealthKit());
-    const userId = stateRef.current.user?.id || stateRef.current.storage.tempUserId;
-    Subscriptions_cleanupOutdatedAppleReceipts(dispatch, userId, service, stateRef.current.storage.subscription);
-    Subscriptions_cleanupOutdatedGooglePurchaseTokens(dispatch, userId, service, stateRef.current.storage.subscription);
+    if (DevFitConfig.storeEnabled) {
+      const userId = stateRef.current.user?.id || stateRef.current.storage.tempUserId;
+      Subscriptions_cleanupOutdatedAppleReceipts(dispatch, userId, service, stateRef.current.storage.subscription);
+      Subscriptions_cleanupOutdatedGooglePurchaseTokens(dispatch, userId, service, stateRef.current.storage.subscription);
+    }
   }, []);
 
   useEffect(() => {
@@ -492,7 +401,7 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
 
   useEffect(() => {
     const iap = env.iap;
-    if (!iap) {
+    if (!DevFitConfig.storeEnabled || !iap) {
       return;
     }
     const unsubPurchase = iap.onPurchaseUpdated((purchase) => {
@@ -746,9 +655,11 @@ export function App(): React.JSX.Element {
       await IndexedDBUtils_initializeForSafari();
       const key = await getIdbKey();
       const localStorage = await persistence.load(key);
+      const hasUnreadableStorage = localStorage == null && await persistence.hasStoredData(key);
       const url = new URL(`${__HOST__}/app/`);
+      if (!DevFitConfig.officialCloudEnabled) url.searchParams.set("nosync", "true");
       const deviceId = await DeviceId_get();
-      const state = await getInitialState(fetch, { localStorage, url, deviceId });
+      const state = await getInitialState(fetch, { localStorage, url, deviceId, hasUnreadableStorage });
       Theme_apply(state.storage.settings.theme);
       TextSize_apply(TextSize_resolve(state.storage.settings));
       if (state.storage.history.length > 0) {

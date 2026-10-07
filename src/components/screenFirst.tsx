@@ -16,6 +16,7 @@ import { IconTracker } from "./icons/iconTracker";
 import { ImagePreloader_preload } from "../utils/imagePreloader";
 import { navigateToModal } from "../navigation/navigationService";
 import { BundledImages_resolve, BundledImages_svgXml } from "../utils/bundledImages";
+import { DevFitConfig } from "../devfit/config";
 
 interface IProps {
   dispatch: IDispatch;
@@ -112,7 +113,7 @@ export function ScreenFirst(props: IProps): JSX.Element {
             <AnimatedArrow />
           </View>
         </Button>
-        <View className="pb-4 mt-2">
+        {DevFitConfig.officialCloudEnabled && <View className="pb-4 mt-2">
           <Button
             className="w-full ls-onboarding-have-account"
             name="see-how-it-works"
@@ -121,7 +122,7 @@ export function ScreenFirst(props: IProps): JSX.Element {
           >
             I have an account
           </Button>
-        </View>
+        </View>}
       </View>
     </View>
   );
@@ -167,7 +168,7 @@ function FirstSlide(): JSX.Element {
         resizeMode="cover"
       />
       <Text className="px-8 pt-24 text-3xl font-bold leading-scaled-9 text-text-alwayswhite">
-        The most powerful weightlifting{" "}
+        DevFit: your weightlifting{" "}
         <Text className="text-3xl" style={{ color: Tailwind_colors().purple[400] }}>
           planner
         </Text>{" "}

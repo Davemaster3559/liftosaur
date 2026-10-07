@@ -1660,6 +1660,8 @@ export interface ISettings {
   recentExercises?: Partial<Record<string, string[]>>;
   theme?: "dark" | "light";
   currentBodyweight?: IWeight;
+  devfitCycleDays?: number;
+  devfitCycleTarget?: number;
   affiliateEnabled?: boolean;
 }
 const _VSettings = v.object({
@@ -1711,6 +1713,8 @@ const _VSettings = v.object({
   recentExercises: v.optional(v.record(VExerciseId, v.optional(v.array(VExerciseId)))),
   theme: v.optional(v.union([v.literal("dark"), v.literal("light")])),
   currentBodyweight: v.optional(VWeight),
+  devfitCycleDays: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
+  devfitCycleTarget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
   affiliateEnabled: v.optional(v.boolean()),
 });
 const _VSettingsMatches: IEquals<v.InferOutput<typeof _VSettings>, ISettings> = true;

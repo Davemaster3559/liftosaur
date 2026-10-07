@@ -30,7 +30,7 @@ import { ExerciseImage } from "./exerciseImage";
 import { GraphExercise } from "./graphExercise";
 import { Collector } from "../utils/collector";
 import { Locker } from "./locker";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { ExerciseDataSettings } from "./exerciseDataSettings";
 import { LinkButton } from "./linkButton";
 import { Thunk_pullScreen } from "../ducks/thunks";
@@ -153,7 +153,7 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
   );
   const exerciseKey = useMemo(() => Exercise_toKey(exerciseType), [exerciseType]);
   const fullName = useMemo(() => Exercise_fullName(fullExercise, settings), [fullExercise, settings]);
-  const isInteractive = useMemo(() => Subscriptions_hasSubscription(props.subscription), [props.subscription]);
+  const isInteractive = useMemo(() => Capabilities_hasLocal("graphs"), [props.subscription]);
 
   const maxWeightProp = useMemo(
     () => (maxWeight ? { weight: maxWeight, historyRecord: maxWeightHistoryRecord } : undefined),
@@ -213,7 +213,7 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
       </View>
       {history.length > 1 && (
         <View data-testid="exercise-stats-graph" testID="exercise-stats-graph" className="relative">
-          <Locker topic="Graphs" dispatch={dispatch} blur={8} subscription={props.subscription} />
+          <Locker capability="graphs" topic="Graphs" dispatch={dispatch} blur={8} subscription={props.subscription} />
           <GraphExercise
             isSameXAxis={false}
             minX={Math.round(minX / 1000)}

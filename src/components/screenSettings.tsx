@@ -1,5 +1,5 @@
 import { JSX, memo, useEffect, useState } from "react";
-import { View, Pressable, Linking, Platform } from "react-native";
+import { View, Pressable, Platform } from "react-native";
 import { Text } from "./primitives/text";
 import { IDispatch } from "../ducks/types";
 import { MenuItem, MenuItemWrapper } from "./menuItem";
@@ -16,17 +16,18 @@ import { IUser } from "../models/user";
 import { ClipboardUtils_copy } from "../utils/clipboard";
 import { Share_generateProfileLink } from "../models/share";
 import { IImportSession, ILengthUnit, ISettings, IStats, ISubscription, IUnit } from "../types";
-import { WhatsNew_showWhatsNew } from "../models/whatsnewUtils";
 import { ImporterStorage } from "./importerStorage";
 import { ImporterProgram } from "./importerProgram";
 import { useNavOptions } from "../navigation/useNavOptions";
 import { GroupHeader } from "./groupHeader";
 import { StringUtils_truncate } from "../utils/string";
-import { IconDiscord } from "./icons/iconDiscord";
+import { DevFitAbout } from "../devfit/about";
+import { Cycle_setting } from "../devfit/cycle";
+import { DevFitConfig } from "../devfit/config";
 import { IconSpeaker } from "./icons/iconSpeaker";
 import { ImporterLiftosaurCsv } from "./importerLiftosaurCsv";
 import { navigateToModal } from "../navigation/navigationService";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { HealthSync_eligibleForAppleHealth, HealthSync_eligibleForGoogleHealth } from "../lib/healthSync";
 import { INavCommon } from "../models/state";
 import { Stats_getCurrentBodyweight, Stats_getCurrentBodyfat } from "../models/stats";
@@ -49,10 +50,6 @@ interface IProps {
   settings: ISettings;
   importSessions?: IImportSession[];
   navCommon: INavCommon;
-}
-
-function openExternal(url: string): void {
-  Linking.openURL(url).catch(() => undefined);
 }
 
 function ScreenSettingsInner(props: IProps): JSX.Element {
@@ -80,6 +77,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
           props.dispatch(Thunk_pushScreen("programs"));
         }}
       />
+      {DevFitConfig.officialCloudEnabled && <>
       <GroupHeader name="Account" topPadding={true} />
       <MenuItem
         name="Account"
@@ -168,6 +166,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
         shouldShowRightArrow={true}
         onClick={() => props.dispatch(Thunk_pushScreen("apiKeys"))}
       />
+      </>}
 
       <GroupHeader name="My Measurements" topPadding={true} />
       {currentBodyweight && (
@@ -346,7 +345,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
               </View>
             </View>
           </MenuItemWrapper>
-          {Subscriptions_hasSubscription(props.subscription) && Platform.OS === "android" && (
+          {Capabilities_hasLocal("notifications") && Platform.OS === "android" && (
             <MenuItemEditable
               type="boolean"
               name="Ignore Do Not Disturb"
@@ -390,6 +389,21 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
           )}
         </>
       )}
+      <GroupHeader name="Training cycle" topPadding={true} />
+      <MenuItemEditable type="number" name="Rolling cycle length" valueUnits="days"
+        value={String(Cycle_setting(props.settings.devfitCycleDays, 8))} maxLength={2}
+        onChange={(value) => {
+          if (value && Number.isFinite(Number(value))) props.dispatch({ type: "UpdateSettings",
+            lensRecording: lb<ISettings>().p("devfitCycleDays").record(Cycle_setting(Number(value), 8)),
+            desc: "Change training cycle length" });
+        }} />
+      <MenuItemEditable type="number" name="Target sessions per cycle"
+        value={String(Cycle_setting(props.settings.devfitCycleTarget, 4))} maxLength={2}
+        onChange={(value) => {
+          if (value && Number.isFinite(Number(value))) props.dispatch({ type: "UpdateSettings",
+            lensRecording: lb<ISettings>().p("devfitCycleTarget").record(Cycle_setting(Number(value), 4)),
+            desc: "Change training cycle target" });
+        }} />
       <GroupHeader name="Appearance" topPadding={true} />
       <MenuItemWrapper name="text-size">
         <View className="py-2">
@@ -457,7 +471,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
           });
         }}
       />
-      {Features_isEnabled("affiliates", props.user?.id ?? props.tempUserId) && (
+      {DevFitConfig.officialCloudEnabled && Features_isEnabled("affiliates", props.user?.id ?? props.tempUserId) && (
         <>
           <GroupHeader name="Earn money with Liftosaur" topPadding={true} />
           <MenuItem
@@ -507,61 +521,8 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
         />
       )}
 
-      <GroupHeader name="Miscellaneous" topPadding={true} />
-      <MenuItem name="Changelog" onClick={() => WhatsNew_showWhatsNew(props.dispatch)} />
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("mailto:info@liftosaur.com")}
-      >
-        <Text className="text-base text-text-primary">Contact Us</Text>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://discord.com/invite/AAh3cvdBRs")}
-      >
-        <View className="flex-row items-center">
-          <View className="pr-2">
-            <IconDiscord />
-          </View>
-          <Text className="text-base text-text-primary">Discord Server</Text>
-        </View>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://www.liftosaur.com/privacy.html")}
-      >
-        <Text className="text-base text-text-primary">Privacy Policy</Text>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://www.liftosaur.com/terms.html")}
-      >
-        <Text className="text-base text-text-primary">Terms & Conditions</Text>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://www.liftosaur.com/licenses.html")}
-      >
-        <Text className="text-base text-text-primary">Licenses</Text>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://www.liftosaur.com/doc")}
-      >
-        <Text className="text-base text-text-primary">Documentation</Text>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://github.com/astashov/liftosaur")}
-      >
-        <Text className="text-base text-text-primary">Source Code on Github</Text>
-      </Pressable>
-      <Pressable
-        className="py-3 border-b border-border-neutral"
-        onPress={() => openExternal("https://github.com/astashov/liftosaur/discussions")}
-      >
-        <Text className="text-base text-text-primary">📍 Roadmap</Text>
-      </Pressable>
+      <GroupHeader name="About DevFit" topPadding={true} />
+      <DevFitAbout />
     </View>
   );
 }

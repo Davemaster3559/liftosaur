@@ -350,6 +350,16 @@ export class Persistence {
     return loaded;
   }
 
+  public async hasStoredData(baseKey: string): Promise<boolean> {
+    return (await this.store.getAllKeys()).some((key) => key === baseKey || key.startsWith(`liftosaurshard:${baseKey}:`));
+  }
+
+  // Preserve exact raw values, including malformed JSON, for manual recovery.
+  public async recoverySnapshot(baseKey: string): Promise<Record<string, unknown>> {
+    const keys = (await this.store.getAllKeys()).filter((key) => key === baseKey || key.startsWith(`liftosaurshard:${baseKey}:`));
+    return Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await this.store.get(key)])));
+  }
+
   public async delete(baseKey: string): Promise<void> {
     delete this.writeCache[baseKey];
     // Manifest first: a crash mid-deletion must not leave a manifest that resurrects a

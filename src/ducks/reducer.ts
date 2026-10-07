@@ -107,7 +107,7 @@ declare let __HOST__: string;
 
 export async function getInitialState(
   client: Window["fetch"],
-  args: { url?: URL; rawStorage?: string; localStorage?: ILocalStorage; storage?: IStorage; deviceId: string }
+  args: { url?: URL; rawStorage?: string; localStorage?: ILocalStorage; storage?: IStorage; deviceId: string; hasUnreadableStorage?: boolean }
 ): Promise<IState> {
   const url =
     args?.url ||
@@ -116,6 +116,7 @@ export async function getInitialState(
   const messagesuccess = url.searchParams.get("messagesuccess") || undefined;
   const nosync = url.searchParams.get("nosync") === "true";
   let storage: ILocalStorage | undefined;
+  let hasUnreadableStorage = args.hasUnreadableStorage ?? false;
   if (args?.storage) {
     storage = { storage: args.storage };
   } else if (args?.localStorage != null) {
@@ -125,6 +126,7 @@ export async function getInitialState(
       storage = JSON.parse(args.rawStorage);
     } catch (e) {
       storage = undefined;
+      hasUnreadableStorage = true;
     }
   }
   const notification: INotification | undefined =
@@ -143,6 +145,14 @@ export async function getInitialState(
     const errors: IStateErrors = {};
     if (maybeStorage.success) {
       finalStorage = maybeStorage.data;
+    } else if (nosync) {
+      finalStorage = Storage_getDefault();
+      errors.corruptedstorage = {
+        userid: String(storage.storage?.tempUserId ?? "local"),
+        backup: false,
+        confirmed: false,
+        local: true,
+      };
     } else {
       const service = new Service(client);
       const userid = (storage.storage?.tempUserId || `missing-${UidFactory_generateUid(8)}`) as string;
@@ -195,6 +205,9 @@ export async function getInitialState(
     nosync,
     deviceId,
   });
+  if (hasUnreadableStorage || storage != null) {
+    newState.errors.corruptedstorage = { userid: "local", backup: false, confirmed: false, local: true };
+  }
   LogUtils_log(newState.storage.tempUserId, "ls-initialize-user", {}, []);
   return newState;
 }

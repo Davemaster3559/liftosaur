@@ -99,3 +99,5 @@ logs/
 /pricepoints
 
 .archdoc-snapshots/
+/src/devfit/programCatalog.generated.json
+/dist/devfit/

@@ -6,7 +6,8 @@ import { ModalScreenContainer } from "../ModalScreenContainer";
 import { FormSheet } from "../FormSheet";
 import { Button } from "../../components/button";
 import { Text } from "../../components/primitives/text";
-import { Link } from "../../components/link";
+import { Dialog_confirm } from "../../utils/dialog";
+import { DevFit_exportRecovery } from "../../devfit/recovery";
 import { IState, updateState } from "../../models/state";
 import { lb } from "lens-shmens";
 
@@ -26,7 +27,8 @@ export function NavModalCorruptedState(): JSX.Element {
     return unsubscribe;
   }, [navigation]);
 
-  const onReset = (): void => {
+  const onReset = async (): Promise<void> => {
+    if (corruptedstorage?.local && !await Dialog_confirm("Reset DevFit? This replaces your local profile with an empty one. Export and save the recovery file first. This action cannot be undone inside the app.")) return;
     isResettingRef.current = true;
     updateState(
       dispatch,
@@ -49,16 +51,14 @@ export function NavModalCorruptedState(): JSX.Element {
   }
 
   return (
-    <ModalScreenContainer onClose={onReset}>
+    <ModalScreenContainer onClose={() => undefined} shouldShowClose={false}>
       <FormSheet>
         <View>
-          <Text className="pb-4 text-lg font-bold text-center">🚨 Corrupted Storage 🚨</Text>
+          <Text className="pb-4 text-lg font-bold text-center">Local data needs recovery</Text>
         </View>
         <View className="pb-4">
           <Text>
-            Something went <Text className="font-bold">terribly wrong</Text>, and your{" "}
-            {corruptedstorage.local ? "local" : "remote"} storage and history got corrupted. This should never happen,
-            but it did.
+            DevFit could not read your saved profile. Automatic saves are paused to preserve the original data.
           </Text>
         </View>
         <View className="pb-4">
@@ -67,13 +67,12 @@ export function NavModalCorruptedState(): JSX.Element {
               History was successfully backed up, user: <Text className="font-bold">{corruptedstorage.userid}</Text>
             </Text>
           ) : (
-            <Text className="font-bold text-center text-text-error">Could not back up the history</Text>
+            <Text className="text-text-secondary">No cloud backup was created. Export the raw recovery file below and save it somewhere safe.</Text>
           )}
         </View>
         <View className="pb-4">
           <Text>
-            Please contact the developer of this app, and he is going to look into this ASAP. You can contact us at{" "}
-            <Link href="mailto:info@liftosaur.com">info@liftosaur.com</Link>.
+            The recovery file preserves your stored values, including any damaged sections. It is intended for manual repair and is not a normal import file. It may contain your private training data.
           </Text>
         </View>
         <View className="pb-4">
@@ -89,6 +88,9 @@ export function NavModalCorruptedState(): JSX.Element {
           )}
         </View>
         <View className="items-center">
+          <Button name="corrupted-state-export" kind="purple" onClick={() => dispatch(DevFit_exportRecovery())}>
+            Export recovery file
+          </Button>
           <Button name="corrupted-state-reset" kind="red" onClick={onReset}>
             {corruptedstorage.local ? "Reset and start from scratch" : "Continue"}
           </Button>
