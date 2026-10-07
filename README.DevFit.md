@@ -17,7 +17,7 @@ npm run devfit:apk
 
 Android components: platform 36, build tools 36.0.0, NDK 27.1.12297006. Gradle uses the project's wrapper. Linux/macOS may need `chmod +x android/gradlew`. The output is `android/app/build/outputs/apk/release/app-release.apk`.
 
-The initial APK uses the public React Native template development signing key, downloaded from a pinned official template revision and verified by SHA-256. Keystore files stay out of Git. This avoids CI signing secrets and keeps test updates compatible. It is intended for personal testing. A production distribution needs a private signing key; changing keys requires backing up data before uninstall/reinstall.
+The initial APK uses the public React Native template development signing key, downloaded from a pinned official template revision and verified by SHA-256. Keystore files stay out of Git. This avoids CI signing secrets and keeps test updates compatible. It is intended for personal testing. A production distribution needs a private signing key configured in the ignored `android/devfit-keystore.properties`; changing keys requires backing up data before uninstall/reinstall. Upstream signing properties are not used.
 
 ## Personal behavior
 
@@ -29,6 +29,7 @@ The initial APK uses the public React Native template development signing key, d
 - Settings configure a rolling cycle of 1–60 local calendar days and a session target. Home reports completed sessions, working sets, volume, exercise PRs, muscle sets/frequency, bodyweight change and recent estimated strength. Weekly insights remain available. Strength estimates compare the latest two completed sessions; they do not diagnose plateaus or predict custom scripts.
 - Local persistence remains MMKV with the existing sharded format. An unreadable profile pauses saves and offers a raw recovery export before an explicitly confirmed reset.
 - Workout cards show Last / Today / Next from actual logged sets, current targets and built-in progression configuration. Custom Liftoscript gets an honest generic explanation and a link to inspect the program; the engine remains authoritative.
+- Cross-tab navigation keeps the tab container mounted while resetting its child stack, preventing stale Home route parameters from taking over a Graphs or Settings tap.
 
 ## Verification
 
@@ -36,7 +37,10 @@ The initial APK uses the public React Native template development signing key, d
 npm run devfit:prepare
 npm run check
 npm run test:devfit
+npm run test:devfit:render
 ```
+
+The offline lifecycle test logs a set, reloads persisted in-progress data, finishes the workout, reopens history and verifies real progression without any network calls. Native render tests exercise set logging, graphs, cycle insights, program editing, backup and Health Connect settings without a subscription. These use mocked native bridges and do not prove OS behavior.
 
 CI also compiles native Android, verifies APK identity/signature and checks that the JavaScript bundle is embedded. Native runtime behavior still needs testing on a device: offline onboarding, workout completion/progression, force-stop/reopen persistence, background timers and notification actions, Health Connect permission flows, import/export, and folded/unfolded layouts.
 

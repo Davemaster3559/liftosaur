@@ -7,7 +7,9 @@ if (playServiceAccountFile.exists()) {
     apply plugin: "com.github.triplet.play"
 }
 
-def keystorePropertiesFile = rootProject.file("keystore.properties")
+// Only explicit DevFit signing settings may override the public development key.
+// Upstream's keystore.properties points at its developer's private Mac checkout.
+def keystorePropertiesFile = rootProject.file("devfit-keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))

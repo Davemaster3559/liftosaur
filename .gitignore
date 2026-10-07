@@ -50,6 +50,7 @@ android/app/.cxx/
 android/build/
 android/local.properties
 android/keystore.properties
+android/devfit-keystore.properties
 android/app/*.keystore
 
 # Metro

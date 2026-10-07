@@ -1,0 +1,54 @@
+import { act, screen } from "@testing-library/react-native";
+import { DevFitService } from "../src/devfit/service";
+import { Exercise_toKey } from "../src/models/exercise";
+import { navigationRef } from "../src/navigation/navigationRef";
+import { Fixture_build } from "./harness/fixture";
+import { RenderApp_mount } from "./harness/renderApp";
+import { RenderEnv_build } from "./harness/renderEnv";
+
+describe("DevFit signed-out native app", () => {
+  it("logs a set and opens home insights, graphs, backup and Health Connect settings offline", async () => {
+    const state = Fixture_build({ subscribed: false, editingProgram: true });
+    state.nosync = true;
+    state.storage.settings.graphs.graphs = [
+      { vtype: "graph", type: "exercise", id: Exercise_toKey(state.storage.progress[0].entries[0].exercise) },
+    ];
+    const { env, bridges } = RenderEnv_build();
+    const offline = jest.fn(async () => {
+      throw new Error("No network available");
+    });
+    env.service = new DevFitService(offline);
+    const app = await RenderApp_mount(state, env);
+    try {
+      expect(screen.getAllByTestId("devfit-progression").length).toBeGreaterThan(0);
+      await app.completeSet(0);
+      expect(screen.getAllByTestId("set-completed")).toHaveLength(1);
+      expect(bridges.log.names()).toContain("timer.startTimer");
+      expect(bridges.log.names()).toContain("workout.updateLiveActivity");
+
+      await app.goToHomeTab();
+      expect(screen.getByText("Your training cycle")).toBeTruthy();
+      await app.tapFooter("graphs");
+      expect(navigationRef.getCurrentRoute()?.name).toBe("graphsList");
+      expect(screen.getAllByTestId("graph").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Unlock Premium")).toBeNull();
+
+      await app.tapFooter("me");
+      expect(screen.getByText("About DevFit")).toBeTruthy();
+      expect(screen.getByText("Export data to JSON file")).toBeTruthy();
+      await act(async () => {
+        navigationRef.navigate("mainTabs", { screen: "me", params: { screen: "googleHealth", params: undefined } });
+      });
+      await app.settle();
+      expect(screen.getByText("Sync Workouts")).toBeTruthy();
+      expect(screen.getByText("Sync Sleep & Nutrition")).toBeTruthy();
+      await app.openProgram();
+      expect(navigationRef.getCurrentRoute()?.name).toBe("editProgram");
+      await app.tapFooter("home");
+      expect(screen.getByText("Your training cycle")).toBeTruthy();
+      expect(offline).not.toHaveBeenCalled();
+    } finally {
+      await app.unmount();
+    }
+  });
+});

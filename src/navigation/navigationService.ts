@@ -1,4 +1,4 @@
-import { CommonActions, type NavigationState, type PartialState } from "@react-navigation/native";
+import { CommonActions, type NavigationState } from "@react-navigation/native";
 import { navigationRef } from "./navigationRef";
 import { Screen_tab, IScreen } from "../models/screen";
 import type { ITab, IScreenData } from "../models/screen";
@@ -78,26 +78,19 @@ export function navigateTo<T extends IScreen>(screen: T, params?: IAllScreenPara
   }
 
   if (opts?.tab) {
-    const resetState: PartialState<NavigationState> = {
-      index: 0,
-      routes: [
-        {
-          name: "mainTabs",
+    // Keep the tab container mounted and reset its child state. Recreating the root
+    // can restore stale nested route params and send a footer tap back to Home.
+    navigationRef.dispatch(
+      CommonActions.navigate({
+        name: "mainTabs",
+        pop: true,
+        params: {
           state: {
-            routes: [
-              {
-                name: opts.tab,
-                state: {
-                  index: 0,
-                  routes: [{ name: screen, params }],
-                },
-              },
-            ],
+            routes: [{ name: opts.tab, state: { index: 0, routes: [{ name: screen, params }] } }],
           },
         },
-      ],
-    };
-    navigationRef.dispatch(CommonActions.reset(resetState));
+      })
+    );
     return;
   }
 
