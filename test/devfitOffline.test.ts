@@ -30,16 +30,19 @@ describe("DevFit offline services", () => {
   it("evaluates bundled Liftoscript using the existing engine", async () => {
     const service = new DevFitService(offline);
     const program = await service.programDetail("basicBeginner");
-    const text = program.planner.weeks.map((week) =>
-      `# ${week.name}\n${week.days.map((day) => `## ${day.name}\n${day.exerciseText}`).join("\n")}`
-    ).join("\n");
+    const text = program.planner.weeks
+      .map((week) => `# ${week.name}\n${week.days.map((day) => `## ${day.name}\n${day.exerciseText}`).join("\n")}`)
+      .join("\n");
     const result = PlannerProgram_evaluateFull(text, Settings_build());
     expect(result.evaluatedWeeks.success).to.equal(true);
   });
 
   it("blocks production API traffic before any transport runs", async () => {
     let calls = 0;
-    const client = DevFit_localClient(async () => { calls += 1; return {} as Response; });
+    const client = DevFit_localClient(async () => {
+      calls += 1;
+      return {} as Response;
+    });
     for (const address of ["https://api3.liftosaur.com/api/sync2", "https://www.liftosaur.com/api/event"]) {
       try {
         await client(address, { method: "POST", body: "private training data" });

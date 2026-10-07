@@ -18,8 +18,12 @@ function workout(daysAgo: number, weight: number = 100): IHistoryRecord {
   record.id = record.startTime = start.getTime();
   record.endTime = record.startTime + 1000;
   record.date = start.toISOString();
-  record.entries[0].sets[0] = { ...record.entries[0].sets[0], completedReps: 5,
-    completedWeight: Weight_build(weight, "lb"), isCompleted: true };
+  record.entries[0].sets[0] = {
+    ...record.entries[0].sets[0],
+    completedReps: 5,
+    completedWeight: Weight_build(weight, "lb"),
+    isCompleted: true,
+  };
   return record;
 }
 
@@ -48,10 +52,18 @@ describe("DevFit rolling training cycles", () => {
       { vtype: "stat", timestamp: now - 1000, value: Weight_build(100, "kg") },
       { vtype: "stat", timestamp: now, value: Weight_build(220, "lb") },
     ];
-    const summary = Cycle_summary([record], { ...settings, units: "kg" }, stats,
-      { [record.id]: { squat_barbell: { maxWeightSet: record.entries[0].sets[0] } } }, now);
+    const summary = Cycle_summary(
+      [record],
+      { ...settings, units: "kg" },
+      stats,
+      { [record.id]: { squat_barbell: { maxWeightSet: record.entries[0].sets[0] } } },
+      now
+    );
     expect(summary.sets.volume.value).to.be.closeTo(Weight_convertTo(Weight_build(500, "lb"), "kg").value, 0.1);
-    expect(summary.bodyweightChange?.value).to.be.closeTo(Weight_convertTo(Weight_build(220, "lb"), "kg").value - 100, 0.1);
+    expect(summary.bodyweightChange?.value).to.be.closeTo(
+      Weight_convertTo(Weight_build(220, "lb"), "kg").value - 100,
+      0.1
+    );
     expect(summary.prs).to.equal(1);
   });
   it("compares completed estimates without inventing progress for a single observation", () => {

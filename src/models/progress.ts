@@ -74,6 +74,7 @@ import {
 } from "../types";
 import { INativeEffect } from "./nativeEffects";
 import { Capabilities_hasLocal } from "../devfit/capabilities";
+import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { IPercentage, IScriptErrorHandler, ITimedSetSide } from "../types";
 import { TimedSet_open, TimedSet_recordedFor } from "./timedSet";
 import {
@@ -2322,7 +2323,7 @@ export function Progress_changeAmrapAction(
     newProgress,
     action.isPlayground,
     settings.timers.reminder,
-    Capabilities_hasLocal("notifications")
+    !!subscription && Subscriptions_hasSubscription(subscription)
   );
   LiveActivityManager_updateLiveActivityForNextEntry(
     effects,
@@ -2520,7 +2521,7 @@ export function Progress_completeSetAction(
       stopped,
       action.isPlayground,
       settings.timers.reminder,
-      Capabilities_hasLocal("notifications")
+      !!subscription && Subscriptions_hasSubscription(subscription)
     );
     LiveActivityManager_updateLiveActivityForNextEntry(
       effects,
@@ -2651,7 +2652,7 @@ export function Progress_completeSetAction(
     newProgress,
     action.isPlayground,
     settings.timers.reminder,
-    Capabilities_hasLocal("notifications")
+    !!subscription && Subscriptions_hasSubscription(subscription)
   );
   LiveActivityManager_updateLiveActivityForNextEntry(
     effects,

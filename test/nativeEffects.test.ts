@@ -73,6 +73,8 @@ describe("Native effects", () => {
     completeSet(effects, progress, 0, 0, Settings_build(), free);
     expect(types(effects)).to.eql(["startTimer", "resumeWorkout", "updateLiveActivity"]);
     expect(free).to.eql({ apple: [], google: [] });
+    const resume = effects.find((effect) => effect.type === "resumeWorkout");
+    expect(resume?.type === "resumeWorkout" && resume.hasSubscription).to.equal(false);
   });
 
   it("carries the rest duration and the next set's text into the startTimer payload", () => {

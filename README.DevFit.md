@@ -28,6 +28,7 @@ The initial APK uses the public React Native template development signing key, d
 - Rollbar/AppsFlyer Android autolinking, Firebase push and advertising/billing permissions are disabled. Logging and analytics entry points are inert. Health Connect remains optional and uses the DevFit package and bundled privacy page.
 - Settings configure a rolling cycle of 1–60 local calendar days and a session target. Home reports completed sessions, working sets, volume, exercise PRs, muscle sets/frequency, bodyweight change and recent estimated strength. Weekly insights remain available. Strength estimates compare the latest two completed sessions; they do not diagnose plateaus or predict custom scripts.
 - Local persistence remains MMKV with the existing sharded format. An unreadable profile pauses saves and offers a raw recovery export before an explicitly confirmed reset.
+- Workout cards show Last / Today / Next from actual logged sets, current targets and built-in progression configuration. Custom Liftoscript gets an honest generic explanation and a link to inspect the program; the engine remains authoritative.
 
 ## Verification
 

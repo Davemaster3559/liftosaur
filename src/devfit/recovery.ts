@@ -8,7 +8,10 @@ export function DevFit_exportRecovery(): IThunk {
     try {
       const key = await getIdbKey();
       const raw = await env.persistence.recoverySnapshot(key);
-      Exporter_toFile(`devfit-recovery-${Date.now()}.json`, JSON.stringify({ format: "devfit-raw-recovery-v1", raw }, null, 2));
+      Exporter_toFile(
+        `devfit-recovery-${Date.now()}.json`,
+        JSON.stringify({ format: "devfit-raw-recovery-v1", raw }, null, 2)
+      );
     } catch (error) {
       Dialog_alert(`Could not export recovery data: ${String(error)}`);
     }

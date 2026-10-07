@@ -27,7 +27,9 @@ for (const category of ["builtin", "community"]) {
   const directory = path.join(root, "programdata/programs", category);
   if (!fs.existsSync(directory)) continue;
   for (const filename of fs.readdirSync(directory).filter((name) => name.endsWith(".json"))) {
-    programs[`${category}/${filename.slice(0, -5)}`] = JSON.parse(fs.readFileSync(path.join(directory, filename), "utf8"));
+    programs[`${category}/${filename.slice(0, -5)}`] = JSON.parse(
+      fs.readFileSync(path.join(directory, filename), "utf8")
+    );
   }
 }
 fs.writeFileSync(path.join(root, "src/devfit/programCatalog.generated.json"), JSON.stringify({ index, programs }));

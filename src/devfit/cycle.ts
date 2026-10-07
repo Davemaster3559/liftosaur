@@ -5,8 +5,18 @@ import { Reps_avgUnilateralCompletedReps } from "../models/set";
 import { Weight_build, Weight_convertTo, Weight_getOneRepMax } from "../models/weight";
 import { WeekInsightsUtils_calculateSetResults } from "../utils/weekInsightsUtils";
 
-export interface ICycleRange { start: number; end: number; now: number; days: number; }
-export interface ICycleTrend { key: string; name: string; change: number; direction: "up" | "down" | "steady"; }
+export interface ICycleRange {
+  start: number;
+  end: number;
+  now: number;
+  days: number;
+}
+export interface ICycleTrend {
+  key: string;
+  name: string;
+  change: number;
+  direction: "up" | "down" | "steady";
+}
 
 export function Cycle_setting(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) ? Math.min(60, Math.max(1, Math.round(value!))) : fallback;
@@ -30,16 +40,22 @@ export function Cycle_range(settings: ISettings, now: number = Date.now()): ICyc
 }
 
 export function Cycle_records(history: IHistoryRecord[], range: ICycleRange): IHistoryRecord[] {
-  return history.filter((r) => r.vtype === "history_record" && r.startTime >= range.start &&
-    r.startTime < range.end && r.startTime <= range.now);
+  return history.filter(
+    (r) =>
+      r.vtype === "history_record" && r.startTime >= range.start && r.startTime < range.end && r.startTime <= range.now
+  );
 }
 
 export function Cycle_bodyweightChange(stats: IStats, range: ICycleRange, settings: ISettings): IWeight | undefined {
-  const values = (stats.weight.weight ?? []).filter((s) => s.timestamp >= range.start &&
-    s.timestamp < range.end && s.timestamp <= range.now).sort((a, b) => a.timestamp - b.timestamp);
+  const values = (stats.weight.weight ?? [])
+    .filter((s) => s.timestamp >= range.start && s.timestamp < range.end && s.timestamp <= range.now)
+    .sort((a, b) => a.timestamp - b.timestamp);
   if (values.length < 2) return undefined;
-  return Weight_build(Weight_convertTo(values[values.length - 1].value, settings.units).value -
-    Weight_convertTo(values[0].value, settings.units).value, settings.units);
+  return Weight_build(
+    Weight_convertTo(values[values.length - 1].value, settings.units).value -
+      Weight_convertTo(values[0].value, settings.units).value,
+    settings.units
+  );
 }
 
 // Compare each exercise's latest two completed sessions. This is an estimate, not a
@@ -47,7 +63,8 @@ export function Cycle_bodyweightChange(stats: IStats, range: ICycleRange, settin
 export function Cycle_trends(history: IHistoryRecord[], range: ICycleRange, settings: ISettings): ICycleTrend[] {
   const sessions = new Map<string, Array<{ time: number; value: number }>>();
   const exerciseTypes = new Map<string, IHistoryRecord["entries"][number]["exercise"]>();
-  const records = history.filter((r) => r.vtype === "history_record" && r.startTime <= range.now)
+  const records = history
+    .filter((r) => r.vtype === "history_record" && r.startTime <= range.now)
     .sort((a, b) => a.startTime - b.startTime);
   for (const record of records) {
     const byExercise = new Map<string, IHistoryRecord["entries"][number]["sets"]>();
@@ -59,8 +76,11 @@ export function Cycle_trends(history: IHistoryRecord[], range: ICycleRange, sett
     for (const [key, sets] of byExercise) {
       const best = History_getMax1RMSet(sets);
       if (!best || !best.completedWeight || !best.completedReps) continue;
-      const estimate = Weight_getOneRepMax(best.completedWeight, Reps_avgUnilateralCompletedReps(best) ?? 0,
-        best.completedRpe ?? best.rpe ?? 10);
+      const estimate = Weight_getOneRepMax(
+        best.completedWeight,
+        Reps_avgUnilateralCompletedReps(best) ?? 0,
+        best.completedRpe ?? best.rpe ?? 10
+      );
       const value = Weight_convertTo(estimate, settings.units).value;
       if (value <= 0) continue;
       sessions.set(key, [...(sessions.get(key) ?? []).slice(-1), { time: record.startTime, value }]);
@@ -71,18 +91,28 @@ export function Cycle_trends(history: IHistoryRecord[], range: ICycleRange, sett
     if (values.length < 2 || values[1].time < range.start) continue;
     const change = (values[1].value / values[0].value - 1) * 100;
     const exercise = Exercise_get(exerciseTypes.get(key)!, settings.exercises);
-    trends.push({ key, name: Exercise_fullName(exercise, settings), change,
-      direction: change > 1 ? "up" : change < -1 ? "down" : "steady" });
+    trends.push({
+      key,
+      name: Exercise_fullName(exercise, settings),
+      change,
+      direction: change > 1 ? "up" : change < -1 ? "down" : "steady",
+    });
   }
   return trends.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
 }
 
-export function Cycle_summary(history: IHistoryRecord[], settings: ISettings, stats: IStats,
-  prs: IPersonalRecords, now: number = Date.now()) {
+export function Cycle_summary(
+  history: IHistoryRecord[],
+  settings: ISettings,
+  stats: IStats,
+  prs: IPersonalRecords,
+  now: number = Date.now()
+) {
   const range = Cycle_range(settings, now);
   const records = Cycle_records(history, range);
   return {
-    range, records,
+    range,
+    records,
     target: Cycle_setting(settings.devfitCycleTarget, 4),
     sets: WeekInsightsUtils_calculateSetResults(records, settings, Cycle_dayKey),
     prs: History_getNumberOfPersonalRecords(records, prs),

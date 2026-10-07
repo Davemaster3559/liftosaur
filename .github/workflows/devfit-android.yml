@@ -34,6 +34,9 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Install pinned JavaScript dependencies
         run: npm ci --no-audit --no-fund
       - name: Prepare offline application assets
@@ -42,6 +45,8 @@ jobs:
         run: npm run check
       - name: Verify training engine and personal capabilities
         run: npm run test:devfit
+      - name: Verify native cycle and progression cards
+        run: npm run test:devfit:render
       - name: Install Android build components
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
       - name: Prepare public development signing key

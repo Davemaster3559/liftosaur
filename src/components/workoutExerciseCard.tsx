@@ -68,6 +68,7 @@ import { navigateToModal } from "../navigation/navigationService";
 import { Dialog_confirm } from "../utils/dialog";
 import { usePerfRenderCount } from "../utils/usePerfRenderCount";
 import { usePerfWhyRender } from "../utils/usePerfWhyRender";
+import { DevFitProgressionCue } from "../devfit/progressionCue";
 
 interface IWorkoutExerciseCardProps {
   entry: IHistoryEntry;
@@ -576,6 +577,8 @@ function WorkoutExerciseCardInner(props: IWorkoutExerciseCardProps): JSX.Element
           </View>
         )}
       </View>
+      {props.isCurrentProgress && <DevFitProgressionCue entry={entry} previous={lastHistoryEntry}
+        exercise={programExercise} unit={settings.units} onViewRule={programExercise ? onKebabEdit : undefined} />}
       <View className="mt-2">
         <WorkoutExerciseAllSets
           stats={props.stats}

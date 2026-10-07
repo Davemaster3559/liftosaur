@@ -17,7 +17,7 @@ import { WorkoutFinishButton } from "./workoutFinishButton";
 import { WorkoutMenu } from "./workoutMenu";
 import { Thunk_updateLiveActivity, Thunk_deleteProgress, Thunk_pauseWorkout } from "../ducks/thunks";
 import { Reps_findNextSetIndex } from "../models/set";
-import { Capabilities_hasLocal } from "../devfit/capabilities";
+import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { navigateToModal, getCurrentRouteName } from "../navigation/navigationService";
 import { Dialog_confirm } from "../utils/dialog";
 import { usePerfRenderCount } from "../utils/usePerfRenderCount";
@@ -177,7 +177,7 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
       dispatch({
         type: "ResumeWorkoutAction",
         isPlayground: false,
-        hasSubscription: Capabilities_hasLocal("notifications"),
+        hasSubscription: Subscriptions_hasSubscription(props.subscription),
       });
       const currentEntryIndex = props.progress.currentEntryIndex || 0;
       const currentEntry = props.progress.entries[currentEntryIndex];

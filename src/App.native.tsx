@@ -654,7 +654,7 @@ export function App(): React.JSX.Element {
     async function load(): Promise<void> {
       await IndexedDBUtils_initializeForSafari();
       const key = await getIdbKey();
-      const localStorage = await persistence.load(key);
+      const localStorage = await persistence.load(key, true);
       const hasUnreadableStorage = localStorage == null && await persistence.hasStoredData(key);
       const url = new URL(`${__HOST__}/app/`);
       if (!DevFitConfig.officialCloudEnabled) url.searchParams.set("nosync", "true");

@@ -314,7 +314,7 @@ export class Persistence {
   // works from live post-getInitialState state — so ancient blob fields that
   // getInitialState folds into storage (e.g. top-level `progress`) aren't lost by an
   // eager parse→reshard at boot.
-  public async load(baseKey: string): Promise<ILocalStorage | undefined> {
+  public async load(baseKey: string, requireCompleteShards: boolean = false): Promise<ILocalStorage | undefined> {
     const [manifestRaw, legacyRaw] = await Promise.all([this.store.get(manifestKey(baseKey)), this.store.get(baseKey)]);
     const legacy = typeof legacyRaw === "string" ? legacyRaw : undefined;
 
@@ -335,6 +335,9 @@ export class Persistence {
     const assembled = await this.assemble(baseKey);
     if (assembled == null) {
       lg("ls-persistence-shards-unreadable");
+      // DevFit has no cloud recovery. A stale frozen legacy blob must not silently
+      // replace newer damaged shards; the app pauses saves and offers a raw export.
+      if (requireCompleteShards) return undefined;
       return legacy != null ? parseLegacy(legacy) : undefined;
     }
 
