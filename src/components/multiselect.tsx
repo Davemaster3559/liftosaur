@@ -1,5 +1,5 @@
 import { JSX, useState } from "react";
-import { View, Pressable, ScrollView } from "react-native";
+import { View, Pressable, ScrollView, StyleProp, TextStyle } from "react-native";
 import { TextInput } from "./primitives/textInput";
 import { Text } from "./primitives/text";
 import { StringUtils_dashcase } from "../utils/string";
@@ -11,6 +11,7 @@ interface IMultiselectProps {
   readonly id: string;
   readonly initialSelectedValues?: Set<string>;
   readonly placeholder?: string;
+  readonly inputStyle?: StyleProp<TextStyle>;
   "data-testid"?: string;
   testID?: string;
   onChange: (values: Set<string>) => void;
@@ -40,6 +41,7 @@ export function Multiselect(props: IMultiselectProps): JSX.Element {
           placeholder={props.placeholder}
           placeholderTextColor={Tailwind_semantic().text.secondarysubtle}
           value={filter}
+          style={props.inputStyle}
           className="px-4 py-2 text-base border rounded-lg bg-background-default border-border-prominent text-text-primary"
           onFocus={() => setShowValuesList(true)}
           onBlur={() => {

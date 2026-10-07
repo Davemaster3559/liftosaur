@@ -7,6 +7,7 @@ import { Program_fullProgram } from "../models/program";
 import { INavCommon } from "../models/state";
 import { useNavOptions } from "../navigation/useNavOptions";
 import { DevFitTitle } from "../devfit/ui";
+import { Tailwind_semantic } from "../utils/tailwindConfig";
 
 interface IProps {
   dispatch: IDispatch;
@@ -20,7 +21,10 @@ export function ScreenExercises(props: IProps): JSX.Element {
   useNavOptions({ navTitle: "Exercises", navHelpKey: "exercises" });
 
   return (
-    <View className="px-gutter">
+    <View
+      className="px-gutter"
+      style={{ width: "100%", maxWidth: 1180, alignSelf: "center", backgroundColor: Tailwind_semantic().devfit.canvas }}
+    >
       <View style={{ paddingVertical: 20 }}>
         <DevFitTitle
           title="Exercise library"

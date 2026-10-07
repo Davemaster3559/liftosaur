@@ -46,6 +46,7 @@ import { Dialog_confirm } from "../utils/dialog";
 import { DevFitColumns, DevFitMetric, DevFitSurface, DevFitTag, DevFitTitle } from "../devfit/ui";
 import { Weight_print } from "../models/weight";
 import { Session_kind, Session_minutes, Session_recordedSeconds } from "../devfit/presentation";
+import { Tailwind_semantic } from "../utils/tailwindConfig";
 
 interface IProps {
   exerciseType: IExerciseType;
@@ -181,7 +182,16 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
   );
 
   return (
-    <View className="px-gutter">
+    <View
+      className="px-gutter"
+      style={{
+        width: "100%",
+        maxWidth: 1180,
+        alignSelf: "center",
+        paddingBottom: 32,
+        backgroundColor: Tailwind_semantic().devfit.canvas,
+      }}
+    >
       <View style={{ paddingVertical: 20, gap: 20 }}>
         <DevFitColumns
           primary={
@@ -259,10 +269,10 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
         programExerciseIds={programExerciseIds}
         settings={settings}
         dispatch={dispatch}
-        show1RM={true}
+        show1RM={!cardio}
       />
 
-      {history.length > 1 && (
+      {history.length > 1 && !cardio && (
         <View data-testid="exercise-stats-graph" testID="exercise-stats-graph" className="relative">
           <Locker capability="graphs" topic="Graphs" dispatch={dispatch} blur={8} subscription={props.subscription} />
           <GraphExercise
@@ -281,7 +291,7 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
           />
         </View>
       )}
-      {showPrs && (
+      {showPrs && !cardio && (
         <View className="mt-8">
           <ExerciseAllTimePRs maxWeight={maxWeightProp} max1RM={max1RMProp} settings={settings} dispatch={dispatch} />
         </View>
