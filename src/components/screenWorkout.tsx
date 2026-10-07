@@ -1,4 +1,4 @@
-import { JSX, memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { JSX, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, InteractionManager, View } from "react-native";
 import { useTrackClick } from "../utils/clickTracking";
 import { IHistoryRecord, IProgram, ISettings, IStats, ISubscription } from "../types";
@@ -22,6 +22,9 @@ import { navigateToModal, getCurrentRouteName } from "../navigation/navigationSe
 import { Dialog_confirm } from "../utils/dialog";
 import { usePerfRenderCount } from "../utils/usePerfRenderCount";
 import { IWorkoutProgressView, WorkoutProgressView_next } from "../utils/workoutProgressView";
+import { DevFitWorkout } from "../devfit/workout";
+import { DevFitRestPanel } from "../devfit/restPanel";
+import { DevFitAction } from "../devfit/ui";
 
 interface IScreenWorkoutProps {
   progress: IHistoryRecord;
@@ -43,6 +46,7 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
   const progress = props.progress;
   const program = props.program;
   const settings = props.settings;
+  const [advanced, setAdvanced] = useState(false);
   const evaluatedProgram = useMemo(
     () => (program ? Program_evaluate(program, settings) : undefined),
     [program, settings]
@@ -255,28 +259,54 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
   progressViewRef.current = progressView;
 
   useNavOptions({
-    navTitle: isCurrent ? "Ongoing workout" : `${DateUtils_format(progress.date)}`,
+    navTitle: isCurrent ? "Training" : `${DateUtils_format(progress.date)}`,
     navOnTitleClick: !isCurrent ? onTitleClick : undefined,
     navSubtitle,
     navRightButtons,
   });
 
   if (progress != null) {
+    if (isCurrent && !advanced)
+      return (
+        <DevFitWorkout
+          progress={progress}
+          history={props.history}
+          program={evaluatedProgram}
+          settings={settings}
+          subscription={props.subscription}
+          dispatch={props.dispatch}
+          onAdvanced={() => setAdvanced(true)}
+          finish={
+            <WorkoutFinishButton
+              prominent
+              progressRef={progressRef}
+              isCurrent={isCurrent}
+              settings={settings}
+              dispatch={dispatch}
+            />
+          }
+          menu={renderHeaderMenu(() => {})}
+        />
+      );
     return (
-      <Workout
-        stats={props.navCommon.stats}
-        allPrograms={props.allPrograms}
-        subscription={props.subscription}
-        history={props.history}
-        helps={props.helps}
-        settings={props.settings}
-        program={evaluatedProgram}
-        isTimerShown={true}
-        programDay={programDay}
-        progress={progressView}
-        dispatch={props.dispatch}
-        renderHeaderMenu={renderHeaderMenu}
-      />
+      <View style={{ flex: 1 }}>
+        {isCurrent && <DevFitAction label="Back to focused workout" secondary onPress={() => setAdvanced(false)} />}
+        {isCurrent && <DevFitRestPanel progress={progress} settings={settings} dispatch={dispatch} />}
+        <Workout
+          stats={props.navCommon.stats}
+          allPrograms={props.allPrograms}
+          subscription={props.subscription}
+          history={props.history}
+          helps={props.helps}
+          settings={props.settings}
+          program={evaluatedProgram}
+          isTimerShown={true}
+          programDay={programDay}
+          progress={progressView}
+          dispatch={props.dispatch}
+          renderHeaderMenu={renderHeaderMenu}
+        />
+      </View>
     );
   } else {
     return null;

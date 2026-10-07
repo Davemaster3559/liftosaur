@@ -1,14 +1,15 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-apply plugin: "com.google.gms.google-services"
 
-def playServiceAccountFile = rootProject.file("../lambda/scripts/liftosaur-google-service-account-key.json")
+def playServiceAccountFile = rootProject.file("devfit-play-service-account.json")
 if (playServiceAccountFile.exists()) {
     apply plugin: "com.github.triplet.play"
 }
 
-def keystorePropertiesFile = rootProject.file("keystore.properties")
+// Only explicit DevFit signing settings may override the public development key.
+// Upstream's keystore.properties points at its developer's private Mac checkout.
+def keystorePropertiesFile = rootProject.file("devfit-keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
@@ -88,7 +89,7 @@ repositories {
     maven { url 'https://artifact.bytedance.com/repository/AwemeOpenSDK' }
 }
 
-def disableOta = (System.getenv("DISABLE_OTA") ?: "").toBoolean()
+def disableOta = true
 
 // AndroidInfoHelpers reads the dev server port from R.integer.react_native_dev_server_port, which
 // defaults to 8081 inside the react-android library. Worktrees run their own Metro, so override it
@@ -113,7 +114,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.liftosaur.www.twa"
+    namespace "com.devfit.app"
 
     externalNativeBuild {
         cmake {
@@ -122,11 +123,11 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.liftosaur.www.twa"
+        applicationId "com.devfit.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 152
-        versionName "152.0"
+        versionCode 2
+        versionName "0.2.0"
         buildConfigField "boolean", "DISABLE_OTA", "${disableOta}"
     }
     buildFeatures {
@@ -186,8 +187,6 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.exifinterface:exifinterface:1.3.3'
     implementation 'io.github.Rosemoe.sora-editor:editor:0.23.6'
-    implementation platform('com.google.firebase:firebase-bom:34.17.0')
-    implementation 'com.google.firebase:firebase-messaging'
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

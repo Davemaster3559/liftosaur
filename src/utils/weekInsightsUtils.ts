@@ -15,7 +15,8 @@ type IResultsSetSplit = Omit<ISetResults, "total" | "strength" | "hypertrophy" |
 
 export function WeekInsightsUtils_calculateSetResults(
   historyRecords: IHistoryRecord[],
-  settings: ISettings
+  settings: ISettings,
+  dayKey: (record: IHistoryRecord) => number = (record) => new Date(record.startTime).getDay()
 ): ISetResults {
   const results: ISetResults = {
     volume: Weight_build(0, settings.units),
@@ -32,7 +33,7 @@ export function WeekInsightsUtils_calculateSetResults(
   };
 
   for (const record of historyRecords) {
-    const dayIndex = new Date(record.startTime).getDay();
+    const dayIndex = dayKey(record);
     for (const entry of record.entries) {
       const exercise = Exercise_get(entry.exercise, settings.exercises);
       if (exercise == null) {

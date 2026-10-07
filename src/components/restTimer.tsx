@@ -75,6 +75,7 @@ export function RestTimer_formatCompact(ms: number): string {
 }
 
 interface IProps {
+  hidePresentation?: boolean;
   progress: IHistoryRecord;
   dispatch: IDispatch;
   subscription: ISubscription;
@@ -171,7 +172,7 @@ export function RestTimer(props: IProps): JSX.Element | null {
     props.dispatch(Thunk_checkSetTimer());
   });
 
-  if (timer == null || timerSince == null) {
+  if (timer == null || timerSince == null || props.hidePresentation) {
     return null;
   }
   const pointerEventsMode = hideTimer ? "none" : "box-none";

@@ -4,7 +4,12 @@ import { useAppState } from "../StateContext";
 import { ModalScreenContainer } from "../ModalScreenContainer";
 import { FormSheet } from "../FormSheet";
 import { SetTimerBannerContent } from "../../components/setTimerBanner";
-import { Program_evaluate, Program_fullProgram, Program_getProgramExercise } from "../../models/program";
+import {
+  Program_evaluate,
+  Program_fullProgram,
+  Program_getProgramExercise,
+  Program_getFullProgram,
+} from "../../models/program";
 import { buildPlaygroundDispatch, getPlaygroundProgress } from "./navModalPlaygroundUtils";
 import { useClearOnModalRemove } from "../useClearOnModalRemove";
 import { Progress_getActiveSetTimer } from "../../models/progress";
@@ -48,7 +53,12 @@ export function NavModalSetTimer(): JSX.Element {
     ? state.playgroundState?.program
       ? Program_evaluate(Program_fullProgram(state.playgroundState.program, settings), settings)
       : undefined
-    : undefined;
+    : progress?.programId
+      ? (() => {
+          const program = Program_getFullProgram(state, progress.programId);
+          return program ? Program_evaluate(program, settings) : undefined;
+        })()
+      : undefined;
   const entry = setTimerModal != null ? progress?.entries[setTimerModal.entryIndex] : undefined;
   const programExercise =
     evaluatedProgram && progress

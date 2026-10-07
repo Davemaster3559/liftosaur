@@ -1,4 +1,4 @@
-import { CommonActions, type NavigationState, type PartialState } from "@react-navigation/native";
+import { CommonActions, type NavigationState } from "@react-navigation/native";
 import { navigationRef } from "./navigationRef";
 import { Screen_tab, IScreen } from "../models/screen";
 import type { ITab, IScreenData } from "../models/screen";
@@ -78,26 +78,18 @@ export function navigateTo<T extends IScreen>(screen: T, params?: IAllScreenPara
   }
 
   if (opts?.tab) {
-    const resetState: PartialState<NavigationState> = {
-      index: 0,
-      routes: [
-        {
-          name: "mainTabs",
-          state: {
-            routes: [
-              {
-                name: opts.tab,
-                state: {
-                  index: 0,
-                  routes: [{ name: screen, params }],
-                },
-              },
-            ],
-          },
+    // Navigate through each nested navigator. A `state` object inside route params
+    // is ordinary data and does not select a tab when that navigator is mounted.
+    navigationRef.dispatch(
+      CommonActions.navigate({
+        name: "mainTabs",
+        pop: true,
+        params: {
+          screen: opts.tab,
+          params: { screen, params, initial: false },
         },
-      ],
-    };
-    navigationRef.dispatch(CommonActions.reset(resetState));
+      })
+    );
     return;
   }
 

@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import NativeLftUpdater from "../specs/NativeLftUpdater";
+import { DevFitConfig } from "../devfit/config";
 
 interface IRollbarShim {
   warning?: (msg: string, extra?: unknown) => void;
@@ -26,7 +27,7 @@ export function Ota_activeBundleIdSync(): string | null {
 }
 
 export async function Ota_init(): Promise<void> {
-  if (__DEV__) {
+  if (!DevFitConfig.otaEnabled || __DEV__) {
     return;
   }
 

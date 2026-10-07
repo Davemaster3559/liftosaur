@@ -4,6 +4,7 @@ import { UrlUtils_build } from "./url";
 import { IAffiliateData } from "../types";
 import { IEventPayload } from "../api/service";
 import { EventManager_isAvailable, EventManager_log } from "./eventManager";
+import { DevFitConfig } from "../devfit/config";
 
 declare let Rollbar: RB;
 declare let __API_HOST__: string;
@@ -18,6 +19,7 @@ export function LogUtils_log(
   landingPage?: string,
   detail?: string
 ): void {
+  if (!DevFitConfig.telemetryEnabled) return;
   const platform = {
     name: Platform.OS,
     version: "RN",

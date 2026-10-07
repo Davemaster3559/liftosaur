@@ -23,7 +23,7 @@ import { IEvaluatedProgram, IEvaluatedProgramDay } from "../models/program";
 import { IByExercise } from "../pages/planner/plannerEvaluator";
 import { Collector } from "../utils/collector";
 import { Locker } from "./locker";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { GraphExercise } from "./graphExercise";
 import { ExerciseAllTimePRs } from "./exerciseAllTimePRs";
 import { ExerciseHistory } from "./exerciseHistory";
@@ -204,7 +204,7 @@ function WorkoutExerciseInner(props: IWorkoutExerciseProps): JSX.Element {
                 ref={graphImpression.ref}
                 onLayout={graphImpression.onLayout}
               >
-                <Locker topic="Graphs" dispatch={props.dispatch} blur={8} subscription={props.subscription} />
+                <Locker capability="graphs" topic="Graphs" dispatch={props.dispatch} blur={8} subscription={props.subscription} />
                 <ActiveGraphContext.Provider value={activeGraphValue}>
                   <PerfProbeSubtree id="graph">
                     <GraphExercise
@@ -220,7 +220,7 @@ function WorkoutExerciseInner(props: IWorkoutExerciseProps): JSX.Element {
                       exercise={exerciseType}
                       initialType={props.settings.graphsSettings.defaultType}
                       dispatch={props.dispatch}
-                      isInteractive={Subscriptions_hasSubscription(props.subscription)}
+                      isInteractive={Capabilities_hasLocal("graphs")}
                       onInteract={onGraphInteract}
                     />
                   </PerfProbeSubtree>

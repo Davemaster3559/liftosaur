@@ -9,7 +9,7 @@ import { Modal } from "./modal";
 import { MusclesView } from "./muscles/musclesView";
 import { Locker } from "./locker";
 import { navigateToModal } from "../navigation/navigationService";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import {
   IEvaluatedProgram,
   Program_evaluate,
@@ -206,10 +206,10 @@ export function ProgramPreviewMusclesModal(props: IProgramPreviewMusclesModalPro
       shouldShowClose={true}
       onClose={props.onClose}
       isFullWidth={true}
-      overflowHidden={props.dispatch && !Subscriptions_hasSubscription(props.subscription)}
+      overflowHidden={props.dispatch && !Capabilities_hasLocal("muscles")}
     >
       {props.dispatch && (
-        <Locker topic="Muscles" dispatch={props.dispatch} blur={8} subscription={props.subscription} />
+        <Locker capability="muscles" topic="Muscles" dispatch={props.dispatch} blur={8} subscription={props.subscription} />
       )}
       <Text className="pb-2 text-xl font-bold text-center">{title}</Text>
       <MusclesView settings={props.settings} points={points} title={props.program.name} />

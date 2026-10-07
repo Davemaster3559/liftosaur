@@ -15,6 +15,7 @@ import { ImagePicker_pick } from "../../utils/imagePicker";
 import { SheetScreenContainer } from "../SheetScreenContainer";
 import { FormSheet } from "../FormSheet";
 import { Dialog_alert } from "../../utils/dialog";
+import { DevFitConfig } from "../../devfit/config";
 
 export function NavModalExerciseImageSource(): JSX.Element {
   const { state } = useAppState();
@@ -76,20 +77,24 @@ export function NavModalExerciseImageSource(): JSX.Element {
             openImageLibrary({});
           }}
         />
-        <BottomSheetItem
-          title="From Camera"
-          name="from-camera"
-          icon={isUploading ? <IconSpinner width={18} height={18} /> : <IconCamera size={24} />}
-          description="Take a photo"
-          onClick={() => upload("camera")}
-        />
-        <BottomSheetItem
-          title="From Photo Library"
-          name="from-photo-library"
-          icon={isUploading ? <IconSpinner width={18} height={18} /> : <IconPicture size={24} />}
-          description="Pick photo from your photo library"
-          onClick={() => upload("photo-library")}
-        />
+        {DevFitConfig.officialCloudEnabled && (
+          <>
+            <BottomSheetItem
+              title="From Camera"
+              name="from-camera"
+              icon={isUploading ? <IconSpinner width={18} height={18} /> : <IconCamera size={24} />}
+              description="Take a photo"
+              onClick={() => upload("camera")}
+            />
+            <BottomSheetItem
+              title="From Photo Library"
+              name="from-photo-library"
+              icon={isUploading ? <IconSpinner width={18} height={18} /> : <IconPicture size={24} />}
+              description="Pick photo from your photo library"
+              onClick={() => upload("photo-library")}
+            />
+          </>
+        )}
       </View>
     </View>
   );

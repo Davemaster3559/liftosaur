@@ -31,7 +31,7 @@ import { Button } from "./button";
 import { Thunk_pushScreen } from "../ducks/thunks";
 import { updateSettings } from "../models/state";
 import { lb } from "lens-shmens";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { ImagePreloader_dynoflex } from "../utils/imagePreloader";
 import { HostConfig_resolveUrl } from "../utils/hostConfig";
 import { BundledImages_svgXml } from "../utils/bundledImages";
@@ -158,7 +158,7 @@ export function StatsList(props: IProps): JSX.Element {
           setSelectedKey(value as IStatsKey);
         }}
       />
-      {Subscriptions_hasSubscription(props.subscription) && (
+      {Capabilities_hasLocal("graphs") && (
         <MenuItemEditable
           name="Moving Average Window Size"
           type="select"
@@ -199,9 +199,9 @@ export function StatsList(props: IProps): JSX.Element {
               collection={graphPoints}
               statsKey={selectedKey}
               movingAverageWindowSize={movingAverageWindowSize}
-              isInteractive={Subscriptions_hasSubscription(props.subscription)}
+              isInteractive={Capabilities_hasLocal("graphs")}
             />
-            <Locker topic="Graphs" dispatch={props.dispatch} blur={8} subscription={props.subscription} />
+            <Locker capability="graphs" topic="Graphs" dispatch={props.dispatch} blur={8} subscription={props.subscription} />
           </>
         )}
       </View>

@@ -23,6 +23,9 @@ describe("completing one set", () => {
     state = Fixture_build();
     const { env } = RenderEnv_build();
     app = await RenderApp_mount(state, env);
+    // These contracts cover the retained detailed grid. The focused logger has its own flow tests.
+    await app.press("devfit-workout-tools");
+    await app.settle();
   });
 
   afterEach(async () => {

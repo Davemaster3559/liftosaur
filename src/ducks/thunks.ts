@@ -114,6 +114,8 @@ import { getLatestMigrationVersion } from "../migrations/migrations";
 import { LogUtils_log } from "../utils/log";
 import { lg } from "../utils/posthog";
 import { RollbarUtils_config } from "../utils/rollbar";
+import { DevFitConfig } from "../devfit/config";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { UrlUtils_build } from "../utils/url";
 import { ImportFromLiftosaur_convertLiftosaurCsvToHistoryRecords } from "../utils/importFromLiftosaur";
 import { ImportFromHevy_convertHevyCsvToHistoryRecords } from "../utils/importFromHevy";
@@ -1261,6 +1263,10 @@ export function Thunk_startProgramDay(programId?: string): IThunk {
         const newProgress = Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats);
         updateState(dispatch, [lb<IState>().p("storage").p("progress").record([newProgress])], "Create new progress");
         dispatch(Thunk_log("ls-start-workout"));
+        // Let the new progress reach StateContext before mounting its screen.
+        // Native navigation can otherwise mount against the previous context and
+        // its missing-record fallback immediately redirects back to Today.
+        await new Promise((resolve) => setTimeout(resolve, 0));
         dispatch(Thunk_pushScreen("progress", { id: newProgress.id }, { tab: "workout" }));
       } else {
         Dialog_alert("No currently selected program");
@@ -1333,10 +1339,13 @@ export function Thunk_pushScreen<T extends IScreen>(
   opts?: INavigateOpts
 ): IThunk {
   return async (dispatch, getState) => {
+    if (screen === "hearaboutus" && !DevFitConfig.telemetryEnabled) {
+      screen = "programselect" as T;
+    }
     dispatch(Thunk_postevent("navigate-to-" + screen));
     if (
       ["musclesProgram", "musclesDay", "graphsList"].indexOf(screen) !== -1 &&
-      !Subscriptions_hasSubscription(getState().storage.subscription)
+      !Capabilities_hasLocal(screen === "graphsList" ? "graphs" : "muscles")
     ) {
       opts = { stack: "subscription" };
       screen = "subscription" as T;
@@ -1376,6 +1385,7 @@ export function Thunk_updateScreenParams<T extends IScreen>(params?: IScreenPara
 
 export function Thunk_maybeRequestReview(): IThunk {
   return async (dispatch, getState) => {
+    if (!DevFitConfig.storeEnabled) return;
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -1409,6 +1419,7 @@ export function Thunk_maybeRequestReview(): IThunk {
 
 export function Thunk_maybeRequestSignup(): IThunk {
   return async (dispatch, getState) => {
+    if (!DevFitConfig.officialCloudEnabled) return;
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -2189,7 +2200,7 @@ export function Thunk_fetchInitial(): IThunk {
     }
     dispatch(Thunk_fetchPrograms());
     // A debug sandbox must not verify the target's subscription receipts or restore IAPs.
-    if (AdminDebug_isDebugAccountId(getState().storage.tempUserId)) {
+    if (!DevFitConfig.storeEnabled || AdminDebug_isDebugAccountId(getState().storage.tempUserId)) {
       return;
     }
     dispatch(Thunk_verifySubscriptionKey());

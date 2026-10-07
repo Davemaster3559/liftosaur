@@ -30,7 +30,7 @@ import { ExerciseImage } from "./exerciseImage";
 import { GraphExercise } from "./graphExercise";
 import { Collector } from "../utils/collector";
 import { Locker } from "./locker";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { ExerciseDataSettings } from "./exerciseDataSettings";
 import { LinkButton } from "./linkButton";
 import { Thunk_pullScreen } from "../ducks/thunks";
@@ -43,6 +43,10 @@ import { StringUtils_capitalize } from "../utils/string";
 import { Muscle_getMuscleGroupName } from "../models/muscle";
 import { navigateToModal } from "../navigation/navigationService";
 import { Dialog_confirm } from "../utils/dialog";
+import { DevFitColumns, DevFitMetric, DevFitSurface, DevFitTag, DevFitTitle } from "../devfit/ui";
+import { Weight_print } from "../models/weight";
+import { Session_kind, Session_minutes, Session_recordedSeconds } from "../devfit/presentation";
+import { Tailwind_semantic } from "../utils/tailwindConfig";
 
 interface IProps {
   exerciseType: IExerciseType;
@@ -153,7 +157,20 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
   );
   const exerciseKey = useMemo(() => Exercise_toKey(exerciseType), [exerciseType]);
   const fullName = useMemo(() => Exercise_fullName(fullExercise, settings), [fullExercise, settings]);
-  const isInteractive = useMemo(() => Subscriptions_hasSubscription(props.subscription), [props.subscription]);
+  const cardio = Session_kind(fullExercise.name) !== "strength";
+  const cardioSeconds = useMemo(
+    () =>
+      history.reduce(
+        (total, record) =>
+          total +
+          Session_recordedSeconds(
+            record.entries.filter((entry) => Exercise_toKey(entry.exercise) === Exercise_toKey(exerciseType))
+          ),
+        0
+      ),
+    [history, exerciseType]
+  );
+  const isInteractive = useMemo(() => Capabilities_hasLocal("graphs"), [props.subscription]);
 
   const maxWeightProp = useMemo(
     () => (maxWeight ? { weight: maxWeight, historyRecord: maxWeightHistoryRecord } : undefined),
@@ -165,9 +182,56 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
   );
 
   return (
-    <View className="px-gutter">
-      <Text className="text-xl font-bold">{fullName}</Text>
-      <Text className="text-xs text-text-secondary">{isCustom ? "Custom exercise" : "Built-in exercise"}</Text>
+    <View
+      className="px-gutter"
+      style={{
+        width: "100%",
+        maxWidth: 1180,
+        alignSelf: "center",
+        paddingBottom: 32,
+        backgroundColor: Tailwind_semantic().devfit.canvas,
+      }}
+    >
+      <View style={{ paddingVertical: 20, gap: 20 }}>
+        <DevFitColumns
+          primary={
+            <>
+              <DevFitTitle
+                eyebrow="Exercise details"
+                title={fullName}
+                subtitle="Your history, technique reference and training setup."
+              />
+              <DevFitTag label={isCustom ? "Custom exercise" : "From the exercise library"} />
+              <DevFitSurface>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+                  <DevFitMetric value={`${history.length}`} label="Recorded sessions" />
+                  {cardio ? (
+                    <DevFitMetric value={Session_minutes(cardioSeconds)} label="Total cardio time recorded" />
+                  ) : (
+                    <>
+                      <DevFitMetric
+                        value={maxWeight.value > 0 ? Weight_print(maxWeight) : "—"}
+                        label="Best logged weight"
+                      />
+                      <DevFitMetric value={max1RM.value > 0 ? Weight_print(max1RM) : "—"} label="Estimated best 1RM" />
+                    </>
+                  )}
+                </View>
+                <Text className="text-xs text-text-secondary">
+                  {cardio
+                    ? "Duration comes from your completed timers. No distance or GPS data is inferred."
+                    : "Strength estimates depend on reps and RPE. Your logged sets are the source of truth."}
+                </Text>
+              </DevFitSurface>
+            </>
+          }
+          secondary={
+            <View data-testid="exercise-stats-image" testID="exercise-stats-image">
+              <ExerciseImage settings={settings} key={exerciseKey} exerciseType={exerciseType} size="large" />
+            </View>
+          }
+        />
+      </View>
       <View className="py-2">
         <MuscleGroupsView exercise={fullExercise} settings={settings} onOverride={onOverrideMuscles} />
       </View>
@@ -205,15 +269,12 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
         programExerciseIds={programExerciseIds}
         settings={settings}
         dispatch={dispatch}
-        show1RM={true}
+        show1RM={!cardio}
       />
 
-      <View data-testid="exercise-stats-image" testID="exercise-stats-image">
-        <ExerciseImage settings={settings} key={exerciseKey} exerciseType={exerciseType} size="large" />
-      </View>
-      {history.length > 1 && (
+      {history.length > 1 && !cardio && (
         <View data-testid="exercise-stats-graph" testID="exercise-stats-graph" className="relative">
-          <Locker topic="Graphs" dispatch={dispatch} blur={8} subscription={props.subscription} />
+          <Locker capability="graphs" topic="Graphs" dispatch={dispatch} blur={8} subscription={props.subscription} />
           <GraphExercise
             isSameXAxis={false}
             minX={Math.round(minX / 1000)}
@@ -230,7 +291,7 @@ export function ScreenExerciseStats(props: IProps): JSX.Element {
           />
         </View>
       )}
-      {showPrs && (
+      {showPrs && !cardio && (
         <View className="mt-8">
           <ExerciseAllTimePRs maxWeight={maxWeightProp} max1RM={max1RMProp} settings={settings} dispatch={dispatch} />
         </View>

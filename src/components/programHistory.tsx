@@ -18,6 +18,7 @@ import { navigateToModal } from "../navigation/navigationService";
 import { useTrackedState } from "../navigation/TrackedStateContext";
 import { HistoryRecordView } from "./historyRecord";
 import { Program_evaluate, Program_getProgramDay } from "../models/program";
+import { DevFitCycleCard } from "../devfit/cycleCard";
 
 interface IProps {
   program: IProgram;
@@ -200,6 +201,8 @@ export function ProgramHistoryView(props: IProps): JSX.Element {
     <View className="flex-1">
       {stickyHeader}
       <LegendList
+        ListHeaderComponent={<DevFitCycleCard history={props.history} settings={props.settings}
+          stats={props.navCommon.stats} prs={prs} now={Date.now()} />}
         key={listRemountKey}
         ref={flatListRef}
         data={sortedHistory}

@@ -67,11 +67,14 @@ describe("Native effects", () => {
     expect(types(effects)).to.eql(["startTimer", "resumeWorkout", "updateLiveActivity"]);
   });
 
-  it("gives a free user no rest notification and no live activity", () => {
+  it("gives an unsubscribed DevFit user local rest notifications and live activity", () => {
     const progress = buildProgress(`# Week 1\n## Day 1\nSquat / 3x5 100lb / 60s\n`);
     const effects: INativeEffect[] = [];
     completeSet(effects, progress, 0, 0, Settings_build(), free);
-    expect(types(effects)).to.eql(["resumeWorkout"]);
+    expect(types(effects)).to.eql(["startTimer", "resumeWorkout", "updateLiveActivity"]);
+    expect(free).to.eql({ apple: [], google: [] });
+    const resume = effects.find((effect) => effect.type === "resumeWorkout");
+    expect(resume?.type === "resumeWorkout" && resume.hasSubscription).to.equal(false);
   });
 
   it("carries the rest duration and the next set's text into the startTimer payload", () => {

@@ -1611,6 +1611,20 @@ const _VMuscleGroupsSettingsMatches: IEquals<
 void _VMuscleGroupsSettingsMatches;
 export const VMuscleGroupsSettings: v.GenericSchema<IMuscleGroupsSettings> = _VMuscleGroupsSettings;
 
+// Presentation-only calendar slots. Program days and their progression remain authoritative.
+export const VDevFitSchedule = v.object({
+  cycleDays: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
+  anchorDate: v.optional(v.string()),
+  days: v.array(
+    v.object({
+      day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
+      programDay: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      context: v.optional(v.picklist(["work", "off"])),
+    })
+  ),
+});
+export type IDevFitSchedule = v.InferOutput<typeof VDevFitSchedule>;
+
 export interface ISettings {
   timers: ISettingsTimers;
   gyms: IGym[];
@@ -1660,6 +1674,9 @@ export interface ISettings {
   recentExercises?: Partial<Record<string, string[]>>;
   theme?: "dark" | "light";
   currentBodyweight?: IWeight;
+  devfitCycleDays?: number;
+  devfitCycleTarget?: number;
+  devfitSchedules?: Record<string, IDevFitSchedule>;
   affiliateEnabled?: boolean;
 }
 const _VSettings = v.object({
@@ -1711,6 +1728,9 @@ const _VSettings = v.object({
   recentExercises: v.optional(v.record(VExerciseId, v.optional(v.array(VExerciseId)))),
   theme: v.optional(v.union([v.literal("dark"), v.literal("light")])),
   currentBodyweight: v.optional(VWeight),
+  devfitCycleDays: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
+  devfitCycleTarget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
+  devfitSchedules: v.optional(v.record(v.string(), VDevFitSchedule)),
   affiliateEnabled: v.optional(v.boolean()),
 });
 const _VSettingsMatches: IEquals<v.InferOutput<typeof _VSettings>, ISettings> = true;

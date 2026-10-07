@@ -14,7 +14,7 @@ import { DateUtils_format } from "../utils/date";
 import { ScrollableTabs } from "./scrollableTabs";
 import { GraphStats, getHealthDataForGraph } from "./graphStats";
 import { Locker } from "./locker";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 
 interface IProps {
   dispatch: IDispatch;
@@ -130,9 +130,9 @@ function HealthMetricList(props: IHealthMetricListProps): JSX.Element {
               settings={settings}
               collection={graphPoints}
               statsKey={statsKey}
-              isInteractive={Subscriptions_hasSubscription(subscription)}
+              isInteractive={Capabilities_hasLocal("graphs")}
             />
-            <Locker topic="Graphs" dispatch={dispatch} blur={8} subscription={subscription} />
+            <Locker capability="graphs" topic="Graphs" dispatch={dispatch} blur={8} subscription={subscription} />
           </>
         )}
       </View>

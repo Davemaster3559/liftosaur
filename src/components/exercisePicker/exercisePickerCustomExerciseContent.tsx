@@ -31,6 +31,7 @@ import { ExerciseImageUtils_url } from "../../models/exerciseImage";
 import { BottomSheetOrModal } from "../bottomSheetOrModal";
 import { useModal } from "../../navigation/ModalStateContext";
 import { ImagePicker_pick } from "../../utils/imagePicker";
+import { DevFitConfig } from "../../devfit/config";
 
 interface IExercisePickerCustomExerciseContentProps {
   settings: ISettings;
@@ -188,49 +189,51 @@ export function ExercisePickerCustomExerciseContent(props: IExercisePickerCustom
             </Button>
           )}
         </View>
-        <View className="mt-4">
-          <Button
-            buttonSize="sm"
-            kind="lightgrayv3"
-            name="autofill-muscles"
-            className="w-full"
-            onPress={async () => {
-              if (!isValid) {
-                Dialog_alert("Please enter a name");
-                return;
-              }
-              setIsAutofilling(true);
-              const response = await service.getMuscles(editCustomExercise.name);
-              setIsAutofilling(false);
-              if (response != null) {
-                const { targetMuscles, synergistMuscles, types } = response;
-                props.dispatch(
-                  [
-                    lb<ICustomExercise>().p("meta").p("targetMuscles").record(targetMuscles),
-                    lb<ICustomExercise>().p("meta").p("synergistMuscles").record(synergistMuscles),
-                    lb<ICustomExercise>().p("types").record(types),
-                  ],
-                  "Autofill custom exercise muscles and types"
-                );
-              } else {
-                Dialog_alert("Couldn't autofill the muscles for this exercise. Try a different name!");
-              }
-            }}
-          >
-            <View className="flex-row items-center">
-              {isAutofilling ? (
-                <View className="flex-row items-center" style={{ minHeight: 24 }}>
-                  <IconSpinner width={18} height={18} />
-                </View>
-              ) : (
-                <>
-                  <IconAi color={Tailwind_semantic().icon.blue} />
-                  <Text className="ml-1 text-sm">Autofill Muscles and Types</Text>
-                </>
-              )}
-            </View>
-          </Button>
-        </View>
+        {DevFitConfig.officialCloudEnabled && (
+          <View className="mt-4">
+            <Button
+              buttonSize="sm"
+              kind="lightgrayv3"
+              name="autofill-muscles"
+              className="w-full"
+              onPress={async () => {
+                if (!isValid) {
+                  Dialog_alert("Please enter a name");
+                  return;
+                }
+                setIsAutofilling(true);
+                const response = await service.getMuscles(editCustomExercise.name);
+                setIsAutofilling(false);
+                if (response != null) {
+                  const { targetMuscles, synergistMuscles, types } = response;
+                  props.dispatch(
+                    [
+                      lb<ICustomExercise>().p("meta").p("targetMuscles").record(targetMuscles),
+                      lb<ICustomExercise>().p("meta").p("synergistMuscles").record(synergistMuscles),
+                      lb<ICustomExercise>().p("types").record(types),
+                    ],
+                    "Autofill custom exercise muscles and types"
+                  );
+                } else {
+                  Dialog_alert("Couldn't autofill the muscles for this exercise. Try a different name!");
+                }
+              }}
+            >
+              <View className="flex-row items-center">
+                {isAutofilling ? (
+                  <View className="flex-row items-center" style={{ minHeight: 24 }}>
+                    <IconSpinner width={18} height={18} />
+                  </View>
+                ) : (
+                  <>
+                    <IconAi color={Tailwind_semantic().icon.blue} />
+                    <Text className="ml-1 text-sm">Autofill Muscles and Types</Text>
+                  </>
+                )}
+              </View>
+            </Button>
+          </View>
+        )}
         <View className="pt-2">
           <ExercisePickerCustomExerciseMuscles
             settings={props.settings}
@@ -357,52 +360,53 @@ export function ExercisePickerCustomExerciseContent(props: IExercisePickerCustom
                 setShowImageLibrary(true);
               }}
             />
-            {Platform.OS !== "web" ? (
-              <BottomSheetItem
-                name="upload-image"
-                title="Upload Image"
-                onClick={() => {
-                  if (!props.isLoggedIn) {
-                    Dialog_alert("You need to be logged in to upload custom exercise images");
-                    return;
-                  }
-                  setShowImageBottomSheet(false);
-                  setShowPicturePickerBottomSheet(true);
-                }}
-              />
-            ) : (
-              <Importer
-                onRawFile={async (file) => {
-                  const imageUploader = new ImageUploader(service);
-                  const url = await imageUploader.uploadImage(file as File, editCustomExercise.id);
-                  setIsUploading(true);
-                  props.dispatch(
-                    [
-                      lb<ICustomExercise>().p("smallImageUrl").record(url),
-                      lb<ICustomExercise>().p("largeImageUrl").record(undefined),
-                    ],
-                    "Set custom exercise image URL"
-                  );
-                  setIsUploading(false);
-                  setShowImageBottomSheet(false);
-                }}
-              >
-                {(onClick) => (
-                  <BottomSheetItem
-                    name="upload-image"
-                    icon={isUploading ? <IconSpinner width={18} height={18} /> : undefined}
-                    title="Upload Image"
-                    onClick={() => {
-                      if (!props.isLoggedIn) {
-                        Dialog_alert("You need to be logged in to upload custom exercise images");
-                      } else {
-                        onClick();
-                      }
-                    }}
-                  />
-                )}
-              </Importer>
-            )}
+            {DevFitConfig.officialCloudEnabled &&
+              (Platform.OS !== "web" ? (
+                <BottomSheetItem
+                  name="upload-image"
+                  title="Upload Image"
+                  onClick={() => {
+                    if (!props.isLoggedIn) {
+                      Dialog_alert("You need to be logged in to upload custom exercise images");
+                      return;
+                    }
+                    setShowImageBottomSheet(false);
+                    setShowPicturePickerBottomSheet(true);
+                  }}
+                />
+              ) : (
+                <Importer
+                  onRawFile={async (file) => {
+                    const imageUploader = new ImageUploader(service);
+                    const url = await imageUploader.uploadImage(file as File, editCustomExercise.id);
+                    setIsUploading(true);
+                    props.dispatch(
+                      [
+                        lb<ICustomExercise>().p("smallImageUrl").record(url),
+                        lb<ICustomExercise>().p("largeImageUrl").record(undefined),
+                      ],
+                      "Set custom exercise image URL"
+                    );
+                    setIsUploading(false);
+                    setShowImageBottomSheet(false);
+                  }}
+                >
+                  {(onClick) => (
+                    <BottomSheetItem
+                      name="upload-image"
+                      icon={isUploading ? <IconSpinner width={18} height={18} /> : undefined}
+                      title="Upload Image"
+                      onClick={() => {
+                        if (!props.isLoggedIn) {
+                          Dialog_alert("You need to be logged in to upload custom exercise images");
+                        } else {
+                          onClick();
+                        }
+                      }}
+                    />
+                  )}
+                </Importer>
+              ))}
           </View>
         </BottomSheetOrModal>
       )}

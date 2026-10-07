@@ -50,6 +50,7 @@ android/app/.cxx/
 android/build/
 android/local.properties
 android/keystore.properties
+android/devfit-keystore.properties
 android/app/*.keystore
 
 # Metro
@@ -99,3 +100,5 @@ logs/
 /pricepoints
 
 .archdoc-snapshots/
+/src/devfit/programCatalog.generated.json
+/dist/devfit/

@@ -19,6 +19,10 @@ import { Progress_isSetTimerCheckDue, IActiveSetTimer } from "../models/progress
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { IByExercise } from "../pages/planner/plannerEvaluator";
 import { IPlannerProgramExercise } from "../pages/planner/models/types";
+import { Session_exerciseKind, Session_timedRecordingSet } from "../devfit/presentation";
+import { DevFitCardioTimer } from "../devfit/cardioTimer";
+import { lb } from "lens-shmens";
+import { updateProgress } from "../models/state";
 
 // Re-renders the clock every 250ms and calls onTick so `auto` circuits advance/complete on time. All the
 // advance/complete/rest logic lives in the model (Progress_checkSetTimer) — this just provides the clock tick.
@@ -106,6 +110,18 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
   const elapsedLabel = TimeUtils_formatMMSS(elapsedMs);
 
   function recordSetTimer(keepTiming: boolean): void {
+    const recordingSet = Session_timedRecordingSet(
+      set!,
+      Session_exerciseKind(props.programExercise, entry, settings),
+      settings
+    );
+    if (recordingSet !== set) {
+      updateProgress(
+        dispatch,
+        lb<IHistoryRecord>().p("entries").i(entryIndex).p("sets").i(setIndex).record(recordingSet),
+        "Record cardio time"
+      );
+    }
     if (isPlayground) {
       dispatch({
         type: "CompleteSetAction",
@@ -144,6 +160,27 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
       dispatch(Thunk_startSetTimerWork());
     }
   }
+
+  const sessionKind = Session_exerciseKind(props.programExercise, entry, settings);
+  if (sessionKind === "running" || sessionKind === "cardio")
+    return (
+      <DevFitCardioTimer
+        entry={entry}
+        exercise={props.programExercise}
+        settings={settings}
+        setIndex={setIndex}
+        elapsedSeconds={elapsedMs / 1000}
+        target={target}
+        readySeconds={isGetReady ? getReadyLeft : undefined}
+        sideLabel={sideLabel}
+        completed={isCompleted}
+        nextSide={isLeft && recordedThisSide}
+        onStart={onStartNow}
+        onRecord={onStopAndRecord}
+        onKeepTiming={onLogKeepTiming}
+        onClose={onClose}
+      />
+    );
 
   if (isGetReady) {
     return (

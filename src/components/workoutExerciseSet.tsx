@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { memo, useCallback, useMemo } from "react";
 import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { useExpandedRowRegistration, useRefocusAfterKeyboardComplete } from "./workoutCenterExpandedRow";
@@ -32,7 +32,8 @@ import { EditProgressEntry_showEditSetModal } from "../models/editProgressEntry"
 import { useTrackClick } from "../utils/clickTracking";
 import { Reps_enforceCompletedSet } from "../models/set";
 import { Weight_eq } from "../models/weight";
-import { Exercise_getIsUnilateral } from "../models/exercise";
+import { Exercise_get, Exercise_getIsUnilateral } from "../models/exercise";
+import { Session_kind, Session_timedRecordingSet } from "../devfit/presentation";
 import { FocusedInputFlush_flush } from "../utils/focusedInputFlush";
 import { IWorkoutSetPreviousLine } from "../utils/workoutSetPrevious";
 import { IWorkoutSetPlatesLine, WorkoutSetPlates_line } from "../utils/workoutSetPlates";
@@ -92,6 +93,7 @@ export function computeSetColumnWidths(remValue: number, isUnilateral: boolean, 
 }
 
 interface IWorkoutExerciseSet {
+  renderBody?: (props: IWorkoutExerciseSetBodyProps) => ReactNode;
   exerciseType: IExerciseType;
   day: number;
   type: IProgressMode;
@@ -258,9 +260,21 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     [dispatch, lbSet]
   );
   const refocus = useRefocusAfterKeyboardComplete();
+  const sessionKind = Session_kind(programExercise?.name ?? Exercise_get(exerciseType, settings.exercises).name, [
+    programExercise?.label ?? "",
+  ]);
   const onCompleteSet = useCallback(() => {
     FocusedInputFlush_flush();
     refocus();
+    if (set.setTimer != null && !set.isCompleted && (sessionKind === "running" || sessionKind === "cardio")) {
+      // Prepare the entire interval sequence before the clock opens. The native
+      // notification and auto-advance paths then use the same neutral values.
+      updateProgress(
+        dispatch,
+        lbSets.recordModify((sets) => sets.map((s) => Session_timedRecordingSet(s, sessionKind, settings))),
+        "Prepare cardio timer"
+      );
+    }
     if (!set.isCompleted) {
       SetCompleteHaptic_play();
     }
@@ -285,6 +299,10 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     isPlayground,
     type,
     set.isCompleted,
+    set.setTimer,
+    sessionKind,
+    lbSets,
+    settings,
     refocus,
     onCompleteExpansion,
   ]);
@@ -401,7 +419,9 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
       {/* Only a swap between the two bodies fades, never the row mounting with the screen.
           The distinct keys make the swap an unmount and a mount, which entering and exiting need. */}
       <LayoutAnimationConfig skipEntering skipExiting>
-        {props.isExpanded ? (
+        {props.renderBody ? (
+          props.renderBody(body)
+        ) : props.isExpanded ? (
           <Animated.View key="expanded" entering={WorkoutBodyEntering} exiting={WorkoutBodyExiting}>
             <WorkoutExerciseSetExpanded {...body} />
           </Animated.View>
