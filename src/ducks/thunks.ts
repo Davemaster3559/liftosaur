@@ -1335,6 +1335,9 @@ export function Thunk_pushScreen<T extends IScreen>(
   opts?: INavigateOpts
 ): IThunk {
   return async (dispatch, getState) => {
+    if (screen === "hearaboutus" && !DevFitConfig.telemetryEnabled) {
+      screen = "programselect" as T;
+    }
     dispatch(Thunk_postevent("navigate-to-" + screen));
     if (
       ["musclesProgram", "musclesDay", "graphsList"].indexOf(screen) !== -1 &&
@@ -1378,6 +1381,7 @@ export function Thunk_updateScreenParams<T extends IScreen>(params?: IScreenPara
 
 export function Thunk_maybeRequestReview(): IThunk {
   return async (dispatch, getState) => {
+    if (!DevFitConfig.storeEnabled) return;
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -1411,6 +1415,7 @@ export function Thunk_maybeRequestReview(): IThunk {
 
 export function Thunk_maybeRequestSignup(): IThunk {
   return async (dispatch, getState) => {
+    if (!DevFitConfig.officialCloudEnabled) return;
     try {
       const history = getState().storage.history;
       const state = getState();

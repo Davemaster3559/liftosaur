@@ -7,6 +7,40 @@ import { RenderApp_mount } from "./harness/renderApp";
 import { RenderEnv_build } from "./harness/renderEnv";
 
 describe("DevFit signed-out native app", () => {
+  it("reaches bundled programs from a fresh offline launch without account or attribution prompts", async () => {
+    const state = Fixture_build({ subscribed: false, ongoingWorkout: false });
+    state.storage.currentProgramId = undefined;
+    state.storage.programs = [];
+    state.nosync = true;
+    const { env } = RenderEnv_build();
+    const offline = jest.fn(async () => {
+      throw new Error("No network available");
+    });
+    env.service = new DevFitService(offline);
+    const app = await RenderApp_mount(state, env, { start: "home" });
+    try {
+      expect(screen.getByText("Get started")).toBeTruthy();
+      expect(screen.queryByText("I have an account")).toBeNull();
+      await app.press("see-how-it-works");
+      await app.settle();
+      expect(screen.getByText("Pick your units")).toBeTruthy();
+      await app.press("see-how-it-works");
+      await app.settle();
+      await app.press("setup-equipment-continue");
+      await app.settle();
+      await app.press("setup-plates-continue");
+      await app.settle();
+      expect(navigationRef.getCurrentRoute()?.name).toBe("programselect");
+      await app.press("program-select-builtin");
+      await app.settle();
+      expect(navigationRef.getCurrentRoute()?.name).toBe("programs");
+      expect(screen.getByTestId("program-search")).toBeTruthy();
+      expect(offline).not.toHaveBeenCalled();
+    } finally {
+      await app.unmount();
+    }
+  });
+
   it("logs a set and opens home insights, graphs, backup and Health Connect settings offline", async () => {
     const state = Fixture_build({ subscribed: false, editingProgram: true });
     state.nosync = true;

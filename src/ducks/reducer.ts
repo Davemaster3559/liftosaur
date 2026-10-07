@@ -86,6 +86,7 @@ import { PerfEnabled_isEnabled, PerfEnabled_tier2 } from "../utils/perfEnabled";
 import { PerfProbe_onAction } from "../utils/perfSetCompleteProbe";
 import { HermesProfile_captureOnce } from "../utils/hermesProfile";
 import { PerfScorecard_recordAction } from "../utils/perfScorecard";
+import { DevFitConfig } from "../devfit/config";
 
 declare let __COMMIT_HASH__: string;
 
@@ -550,7 +551,10 @@ export function defaultOnActions(env: IEnv): IReducerOnAction[] {
       }
     },
     (dispatch, action, oldState, newState) => {
-      if (!ObjectUtils_isEqual(oldState.storage.subscription.google, newState.storage.subscription.google)) {
+      if (
+        DevFitConfig.storeEnabled &&
+        !ObjectUtils_isEqual(oldState.storage.subscription.google, newState.storage.subscription.google)
+      ) {
         const userId = newState.user?.id || newState.storage.tempUserId;
         Subscriptions_cleanupOutdatedGooglePurchaseTokens(dispatch, userId, env.service, newState.storage.subscription);
       }
