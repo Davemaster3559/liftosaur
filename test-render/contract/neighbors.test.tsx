@@ -13,6 +13,8 @@ describe("neighbours and other screens", () => {
     state = Fixture_build();
     const { env } = RenderEnv_build();
     app = await RenderApp_mount(state, env);
+    await app.press("devfit-workout-tools");
+    await app.settle();
   });
 
   afterEach(async () => {
@@ -40,6 +42,8 @@ describe("neighbours and other screens", () => {
 
   it("re-renders the home tab once per completed set, after that tab has been visited", async () => {
     await app.goToHomeTab();
+    await app.press("devfit-history");
+    await app.settle();
     await app.goToWorkout();
 
     const trace = await app.record(async () => {

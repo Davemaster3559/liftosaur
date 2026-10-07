@@ -1,4 +1,4 @@
-import { JSX, useMemo } from "react";
+import { JSX, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import { useAppState } from "../StateContext";
@@ -25,9 +25,12 @@ import { Exercise_find, Exercise_toKey } from "../../models/exercise";
 import { Equipment_getEquipmentOfGym } from "../../models/equipment";
 import { Thunk_pullScreen } from "../../ducks/thunks";
 import { useAppContext } from "../../components/appContext";
+import { DevFitMe } from "../../devfit/me";
+import { DevFitAction } from "../../devfit/ui";
 
 export function NavScreenSettings(): JSX.Element {
   const { state, dispatch } = useAppState();
+  const [allSettings, setAllSettings] = useState(false);
   const subscription = state.storage.subscription;
   const settings = state.storage.settings;
   const stats = state.storage.stats;
@@ -48,8 +51,10 @@ export function NavScreenSettings(): JSX.Element {
     }),
     [loading, currentProgram, settings, isOngoingProgress, stats, user]
   );
+  if (!allSettings) return <DevFitMe settings={settings} dispatch={dispatch} onSettings={() => setAllSettings(true)} />;
   return (
     <NavScreenContent>
+      <DevFitAction label="Back to Me" secondary onPress={() => setAllSettings(false)} />
       <ScreenSettingsComponent
         stats={stats}
         tempUserId={tempUserId}

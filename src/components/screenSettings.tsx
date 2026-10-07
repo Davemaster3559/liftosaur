@@ -77,96 +77,98 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
           props.dispatch(Thunk_pushScreen("programs"));
         }}
       />
-      {DevFitConfig.officialCloudEnabled && <>
-      <GroupHeader name="Account" topPadding={true} />
-      <MenuItem
-        name="Account"
-        value={
-          props.user?.email == null ? (
-            <Text className="text-text-error">Not signed in</Text>
-          ) : props.user?.email === "noemail@example.com" ? (
-            "Signed In"
-          ) : (
-            StringUtils_truncate(props.user?.email || "", 30)
-          )
-        }
-        shouldShowRightArrow={true}
-        onClick={() => props.dispatch(Thunk_pushScreen("account"))}
-      />
-      <MenuItemEditable
-        type="text"
-        name="Nickname"
-        value={props.settings.nickname || ""}
-        nextLine={
-          <View className="pb-1" style={{ marginTop: -8 }}>
-            <Text className="text-xs text-text-secondary">Used for profile page if you have an account</Text>
-          </View>
-        }
-        onChange={(newValue) => {
-          props.dispatch({
-            type: "UpdateSettings",
-            lensRecording: lb<ISettings>()
-              .p("nickname")
-              .record(newValue ? newValue : undefined),
-            desc: "Update nickname",
-          });
-        }}
-      />
-      {props.user && (
-        <MenuItemEditable
-          type="boolean"
-          name="Is Profile Page Public?"
-          value={props.settings.isPublicProfile ? "true" : "false"}
-          nextLine={
-            props.user?.id && props.settings.isPublicProfile ? (
+      {DevFitConfig.officialCloudEnabled && (
+        <>
+          <GroupHeader name="Account" topPadding={true} />
+          <MenuItem
+            name="Account"
+            value={
+              props.user?.email == null ? (
+                <Text className="text-text-error">Not signed in</Text>
+              ) : props.user?.email === "noemail@example.com" ? (
+                "Signed In"
+              ) : (
+                StringUtils_truncate(props.user?.email || "", 30)
+              )
+            }
+            shouldShowRightArrow={true}
+            onClick={() => props.dispatch(Thunk_pushScreen("account"))}
+          />
+          <MenuItemEditable
+            type="text"
+            name="Nickname"
+            value={props.settings.nickname || ""}
+            nextLine={
               <View className="pb-1" style={{ marginTop: -8 }}>
-                <View className="flex-row">
-                  <Pressable
-                    className="mr-auto"
-                    onPress={() => {
-                      const text = Share_generateProfileLink(props.user!.id);
-                      if (text != null) {
-                        ClipboardUtils_copy(text);
-                        setIsCopied(true);
-                      }
-                    }}
-                  >
-                    <Text className="text-xs underline text-text-link">Copy Link To Clipboard</Text>
-                  </Pressable>
-                  <View className="ml-4">
-                    <InternalLink
-                      name="public-profile-page"
-                      href={`/profile/${props.user.id}`}
-                      className="text-xs underline text-text-link"
-                    >
-                      Open Public Profile Page
-                    </InternalLink>
-                  </View>
-                </View>
-                {isCopied && <Text className="text-xs italic text-text-success">Copied!</Text>}
+                <Text className="text-xs text-text-secondary">Used for profile page if you have an account</Text>
               </View>
-            ) : undefined
-          }
-          onChange={(newValue) => {
-            if (props.user != null) {
+            }
+            onChange={(newValue) => {
               props.dispatch({
                 type: "UpdateSettings",
                 lensRecording: lb<ISettings>()
-                  .p("isPublicProfile")
-                  .record(newValue === "true"),
-                desc: "Toggle public profile",
+                  .p("nickname")
+                  .record(newValue ? newValue : undefined),
+                desc: "Update nickname",
               });
-            }
-          }}
-        />
-      )}
+            }}
+          />
+          {props.user && (
+            <MenuItemEditable
+              type="boolean"
+              name="Is Profile Page Public?"
+              value={props.settings.isPublicProfile ? "true" : "false"}
+              nextLine={
+                props.user?.id && props.settings.isPublicProfile ? (
+                  <View className="pb-1" style={{ marginTop: -8 }}>
+                    <View className="flex-row">
+                      <Pressable
+                        className="mr-auto"
+                        onPress={() => {
+                          const text = Share_generateProfileLink(props.user!.id);
+                          if (text != null) {
+                            ClipboardUtils_copy(text);
+                            setIsCopied(true);
+                          }
+                        }}
+                      >
+                        <Text className="text-xs underline text-text-link">Copy Link To Clipboard</Text>
+                      </Pressable>
+                      <View className="ml-4">
+                        <InternalLink
+                          name="public-profile-page"
+                          href={`/profile/${props.user.id}`}
+                          className="text-xs underline text-text-link"
+                        >
+                          Open Public Profile Page
+                        </InternalLink>
+                      </View>
+                    </View>
+                    {isCopied && <Text className="text-xs italic text-text-success">Copied!</Text>}
+                  </View>
+                ) : undefined
+              }
+              onChange={(newValue) => {
+                if (props.user != null) {
+                  props.dispatch({
+                    type: "UpdateSettings",
+                    lensRecording: lb<ISettings>()
+                      .p("isPublicProfile")
+                      .record(newValue === "true"),
+                    desc: "Toggle public profile",
+                  });
+                }
+              }}
+            />
+          )}
 
-      <MenuItem
-        name="API Keys"
-        shouldShowRightArrow={true}
-        onClick={() => props.dispatch(Thunk_pushScreen("apiKeys"))}
-      />
-      </>}
+          <MenuItem
+            name="API Keys"
+            shouldShowRightArrow={true}
+            onClick={() => props.dispatch(Thunk_pushScreen("apiKeys"))}
+          />
+        </>
+      )}
 
       <GroupHeader name="My Measurements" topPadding={true} />
       {currentBodyweight && (
@@ -390,20 +392,39 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
         </>
       )}
       <GroupHeader name="Training cycle" topPadding={true} />
-      <MenuItemEditable type="number" name="Rolling cycle length" valueUnits="days"
-        value={String(Cycle_setting(props.settings.devfitCycleDays, 8))} maxLength={2}
+      <MenuItemEditable
+        type="number"
+        name="Rolling cycle length"
+        valueUnits="days"
+        value={String(Cycle_setting(props.settings.devfitCycleDays, 14))}
+        maxLength={2}
         onChange={(value) => {
-          if (value && Number.isFinite(Number(value))) props.dispatch({ type: "UpdateSettings",
-            lensRecording: lb<ISettings>().p("devfitCycleDays").record(Cycle_setting(Number(value), 8)),
-            desc: "Change training cycle length" });
-        }} />
-      <MenuItemEditable type="number" name="Target sessions per cycle"
-        value={String(Cycle_setting(props.settings.devfitCycleTarget, 4))} maxLength={2}
+          if (value && Number.isFinite(Number(value)))
+            props.dispatch({
+              type: "UpdateSettings",
+              lensRecording: lb<ISettings>()
+                .p("devfitCycleDays")
+                .record(Cycle_setting(Number(value), 14)),
+              desc: "Change training cycle length",
+            });
+        }}
+      />
+      <MenuItemEditable
+        type="number"
+        name="Target sessions per cycle"
+        value={String(Cycle_setting(props.settings.devfitCycleTarget, 4))}
+        maxLength={2}
         onChange={(value) => {
-          if (value && Number.isFinite(Number(value))) props.dispatch({ type: "UpdateSettings",
-            lensRecording: lb<ISettings>().p("devfitCycleTarget").record(Cycle_setting(Number(value), 4)),
-            desc: "Change training cycle target" });
-        }} />
+          if (value && Number.isFinite(Number(value)))
+            props.dispatch({
+              type: "UpdateSettings",
+              lensRecording: lb<ISettings>()
+                .p("devfitCycleTarget")
+                .record(Cycle_setting(Number(value), 4)),
+              desc: "Change training cycle target",
+            });
+        }}
+      />
       <GroupHeader name="Appearance" topPadding={true} />
       <MenuItemWrapper name="text-size">
         <View className="py-2">

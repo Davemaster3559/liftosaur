@@ -152,11 +152,12 @@ import {
   PerfScorecard_setContextProvider,
 } from "./utils/perfScorecard";
 
-if (DevFitConfig.officialCloudEnabled) GoogleSignin.configure({
-  webClientId: "944666871420-p8kv124sgte8o0p6ev2ah6npudsl7e4f.apps.googleusercontent.com",
-  iosClientId: "944666871420-of5rtcpja10vsp2jbe5m6amob7u5qvjq.apps.googleusercontent.com",
-  offlineAccess: false,
-});
+if (DevFitConfig.officialCloudEnabled)
+  GoogleSignin.configure({
+    webClientId: "944666871420-p8kv124sgte8o0p6ev2ah6npudsl7e4f.apps.googleusercontent.com",
+    iosClientId: "944666871420-of5rtcpja10vsp2jbe5m6amob7u5qvjq.apps.googleusercontent.com",
+    offlineAccess: false,
+  });
 
 const watchAuthEvents: Record<IWatchAuthSource, { stale: string; readFail: string }> = {
   startup: { stale: "ls-keychain-stale-on-startup", readFail: "ls-keychain-get-auth-fail-startup" },
@@ -210,7 +211,12 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
     if (DevFitConfig.storeEnabled) {
       const userId = stateRef.current.user?.id || stateRef.current.storage.tempUserId;
       Subscriptions_cleanupOutdatedAppleReceipts(dispatch, userId, service, stateRef.current.storage.subscription);
-      Subscriptions_cleanupOutdatedGooglePurchaseTokens(dispatch, userId, service, stateRef.current.storage.subscription);
+      Subscriptions_cleanupOutdatedGooglePurchaseTokens(
+        dispatch,
+        userId,
+        service,
+        stateRef.current.storage.subscription
+      );
     }
   }, []);
 
@@ -625,6 +631,7 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
                     </NavigationContainer>
                     {progress && currentScreenName && screensWithoutTimer.indexOf(currentScreenName) === -1 && (
                       <RestTimer
+                        hidePresentation={currentScreenName === "progress"}
                         progress={progress}
                         dispatch={dispatch}
                         settings={state.storage.settings}
@@ -655,7 +662,7 @@ export function App(): React.JSX.Element {
       await IndexedDBUtils_initializeForSafari();
       const key = await getIdbKey();
       const localStorage = await persistence.load(key, true);
-      const hasUnreadableStorage = localStorage == null && await persistence.hasStoredData(key);
+      const hasUnreadableStorage = localStorage == null && (await persistence.hasStoredData(key));
       const url = new URL(`${__HOST__}/app/`);
       if (!DevFitConfig.officialCloudEnabled) url.searchParams.set("nosync", "true");
       const deviceId = await DeviceId_get();

@@ -29,7 +29,7 @@ export function Cycle_dayKey(record: IHistoryRecord): number {
 }
 
 export function Cycle_range(settings: ISettings, now: number = Date.now()): ICycleRange {
-  const days = Cycle_setting(settings.devfitCycleDays, 8);
+  const days = Cycle_setting(settings.devfitCycleDays, 14);
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - days + 1);

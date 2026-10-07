@@ -44,6 +44,8 @@ import { Muscle_getMuscleGroupName } from "../models/muscle";
 import { IconDoc } from "./icons/iconDoc";
 import { LiftohistorySerializer_serialize } from "../liftohistory/liftohistorySerializer";
 import { navigateToModal } from "../navigation/navigationService";
+import { DevFitFinish } from "../devfit/finishScreen";
+import { DevFitAction } from "../devfit/ui";
 
 interface IProps {
   history: IHistoryRecord[];
@@ -57,7 +59,8 @@ interface IProps {
 }
 
 export function ScreenFinishDay(props: IProps): JSX.Element {
-  useNavOptions({ navTitle: "Congratulations!" });
+  useNavOptions({ navTitle: "Session complete" });
+  const [details, setDetails] = useState(false);
 
   const recordById =
     props.historyRecordId != null ? props.history.find((h) => h.id === props.historyRecordId) : undefined;
@@ -92,8 +95,22 @@ export function ScreenFinishDay(props: IProps): JSX.Element {
 
   const isMobile = Platform.OS === "ios" || Platform.OS === "android";
 
+  if (!details)
+    return (
+      <DevFitFinish
+        record={record}
+        history={props.history}
+        settings={props.settings}
+        stats={props.stats}
+        program={props.allPrograms.find((p) => p.id === record.programId)}
+        onDetails={() => setDetails(true)}
+        onToday={() => props.dispatch(Thunk_pushScreen("main", undefined, { tab: "home" }))}
+      />
+    );
+
   return (
     <>
+      <DevFitAction label="Back to session summary" secondary onPress={() => setDetails(false)} />
       <View className="px-gutter pb-6">
         <View className="flex-row items-center justify-center pb-2">
           {Platform.OS === "web" ? (

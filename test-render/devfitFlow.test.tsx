@@ -1,4 +1,4 @@
-import { act, screen } from "@testing-library/react-native";
+import { act, fireEvent, screen } from "@testing-library/react-native";
 import { DevFitService } from "../src/devfit/service";
 import { Exercise_toKey } from "../src/models/exercise";
 import { navigationRef } from "../src/navigation/navigationRef";
@@ -61,15 +61,18 @@ describe("DevFit signed-out native app", () => {
       expect(bridges.log.names()).toContain("workout.updateLiveActivity");
 
       await app.goToHomeTab();
-      expect(screen.getByText("Your training cycle")).toBeTruthy();
+      expect(screen.getByTestId("devfit-today")).toBeTruthy();
       await app.tapFooter("graphs");
       expect(navigationRef.getCurrentRoute()?.name).toBe("graphsList");
+      expect(screen.getByTestId("devfit-progress")).toBeTruthy();
+      await fireEvent.press(screen.getByRole("button", { name: "Exercise & muscle graphs" }));
+      await app.settle();
       expect(screen.getAllByTestId("graph").length).toBeGreaterThan(0);
       expect(screen.queryByText("Unlock Premium")).toBeNull();
 
       await app.tapFooter("me");
       expect(screen.getByText("About DevFit")).toBeTruthy();
-      expect(screen.getByText("Export data to JSON file")).toBeTruthy();
+      expect(screen.getByTestId("devfit-backup")).toBeTruthy();
       await act(async () => {
         navigationRef.navigate("mainTabs", { screen: "me", params: { screen: "googleHealth", params: undefined } });
       });
@@ -79,7 +82,7 @@ describe("DevFit signed-out native app", () => {
       await app.openProgram();
       expect(navigationRef.getCurrentRoute()?.name).toBe("editProgram");
       await app.tapFooter("home");
-      expect(screen.getByText("Your training cycle")).toBeTruthy();
+      expect(screen.getByTestId("devfit-today")).toBeTruthy();
       expect(offline).not.toHaveBeenCalled();
     } finally {
       await app.unmount();

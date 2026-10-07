@@ -6,6 +6,7 @@ import { ExercisesList } from "./exercisesList";
 import { Program_fullProgram } from "../models/program";
 import { INavCommon } from "../models/state";
 import { useNavOptions } from "../navigation/useNavOptions";
+import { DevFitTitle } from "../devfit/ui";
 
 interface IProps {
   dispatch: IDispatch;
@@ -20,6 +21,12 @@ export function ScreenExercises(props: IProps): JSX.Element {
 
   return (
     <View className="px-gutter">
+      <View style={{ paddingVertical: 20 }}>
+        <DevFitTitle
+          title="Exercise library"
+          subtitle="Find your movements, equipment and personal favorites. Custom exercises stay on your device."
+        />
+      </View>
       <ExercisesList
         isLoggedIn={!!props.navCommon.userId}
         dispatch={props.dispatch}

@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { memo, useCallback, useMemo } from "react";
 import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { useExpandedRowRegistration, useRefocusAfterKeyboardComplete } from "./workoutCenterExpandedRow";
@@ -92,6 +92,7 @@ export function computeSetColumnWidths(remValue: number, isUnilateral: boolean, 
 }
 
 interface IWorkoutExerciseSet {
+  renderBody?: (props: IWorkoutExerciseSetBodyProps) => ReactNode;
   exerciseType: IExerciseType;
   day: number;
   type: IProgressMode;
@@ -401,7 +402,9 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
       {/* Only a swap between the two bodies fades, never the row mounting with the screen.
           The distinct keys make the swap an unmount and a mount, which entering and exiting need. */}
       <LayoutAnimationConfig skipEntering skipExiting>
-        {props.isExpanded ? (
+        {props.renderBody ? (
+          props.renderBody(body)
+        ) : props.isExpanded ? (
           <Animated.View key="expanded" entering={WorkoutBodyEntering} exiting={WorkoutBodyExiting}>
             <WorkoutExerciseSetExpanded {...body} />
           </Animated.View>

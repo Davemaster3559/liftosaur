@@ -22,6 +22,7 @@ import { Thunk_pullScreen } from "../../ducks/thunks";
 import { useAppContext } from "../../components/appContext";
 import { usePlaygroundModalBridges } from "../usePlaygroundModalBridges";
 import { useEqual } from "../../utils/useEqual";
+import { DevFitSchedule } from "../../devfit/scheduleScreen";
 
 const EMPTY_REVISIONS: string[] = [];
 
@@ -32,6 +33,17 @@ export function NavScreenPrograms(): React.JSX.Element {
   const dispatch = useTrackedDispatch();
   const navCommon = untrack(buildNavCommon(state));
   const progress = untrack(Progress_getCurrentProgress(state));
+  const currentProgram = untrack(Program_getProgram(state, state.storage.currentProgramId));
+  if (currentProgram)
+    return (
+      <DevFitSchedule
+        program={currentProgram}
+        history={untrack(state.storage.history)}
+        settings={untrack(state.storage.settings)}
+        dispatch={dispatch}
+        isOngoing={progress != null}
+      />
+    );
   return (
     <ChooseProgramView
       navCommon={navCommon}

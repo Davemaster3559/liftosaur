@@ -61,3 +61,16 @@ export function Progression_rule(exercise: IPlannerProgramExercise | undefined):
       : "";
   return success + deload;
 }
+
+export function Progression_brief(exercise: IPlannerProgramExercise | undefined): string {
+  const p = exercise && PlannerProgramExercise_progressionType(exercise);
+  if (!p) return "Repeat your targets. No automatic increase configured.";
+  if (p.type === "custom" || !p.increase || p.increase.value <= 0)
+    return "Your custom rule runs when you finish. View the rule for details.";
+  const add = `+${Weight_print(p.increase)}`;
+  if (p.type === "double")
+    return `${add} when every required set reaches ${p.maxReps} reps at its RPE target. Then ${p.minReps} reps.`;
+  if (p.type === "sumreps") return `${add} at ${p.reps} total reps across working sets.`;
+  const remaining = Math.max(1, (p.successesRequired ?? 1) - (p.successesCounter ?? 0));
+  return `${add} after ${remaining === 1 ? "a successful session" : `${remaining} more successful sessions`}. Hit every rep and RPE target.`;
+}

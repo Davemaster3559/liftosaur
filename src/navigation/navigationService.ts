@@ -78,16 +78,15 @@ export function navigateTo<T extends IScreen>(screen: T, params?: IAllScreenPara
   }
 
   if (opts?.tab) {
-    // Keep the tab container mounted and reset its child state. Recreating the root
-    // can restore stale nested route params and send a footer tap back to Home.
+    // Navigate through each nested navigator. A `state` object inside route params
+    // is ordinary data and does not select a tab when that navigator is mounted.
     navigationRef.dispatch(
       CommonActions.navigate({
         name: "mainTabs",
         pop: true,
         params: {
-          state: {
-            routes: [{ name: opts.tab, state: { index: 0, routes: [{ name: screen, params }] } }],
-          },
+          screen: opts.tab,
+          params: { screen, params, initial: false },
         },
       })
     );

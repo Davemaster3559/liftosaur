@@ -10,7 +10,7 @@
     "devfit:prepare": "node scripts/prepare-devfit.cjs",
     "devfit:apk": "npm run devfit:prepare && node scripts/prepare-devfit-signing.cjs && node scripts/build-devfit-android.cjs",
     "test:devfit": "node --no-experimental-strip-types node_modules/mocha/bin/mocha.js -r ts-node/register --timeout 60000 \"test/devfit*.test.ts\" test/parser.test.ts test/scriptfns.test.ts test/setTimer.test.ts \"test/nativeEffects*.test.ts\" test/storageValidation.test.ts test/storageCorruption.test.ts test/history.test.ts test/weight.test.ts \"test/health*.test.ts\" test/importFromLiftosaur.test.ts test/importDuplicates.test.ts test/persistence.test.ts",
-    "test:devfit:render": "node node_modules/jest/bin/jest.js -c jest.render.config.js test-render/devfit.test.tsx test-render/devfitFlow.test.tsx test-render/contract/completeSet.test.tsx test-render/contract/neighbors.test.tsx --runInBand",
+    "test:devfit:render": "node node_modules/jest/bin/jest.js -c jest.render.config.js test-render/devfit.test.tsx test-render/devfitFlow.test.tsx test-render/devfitUx.test.tsx test-render/contract/completeSet.test.tsx test-render/contract/neighbors.test.tsx --runInBand",
     "ios": "npm run build:watch-bundle && RCT_USE_PREBUILT_RNCORE=1 RCT_NEW_ARCH_ENABLED=1 USE_FRAMEWORKS=static env ${SHOW_TOUCHES:+XCODE_XCCONFIG_FILE=$PWD/ios/ShowTouches.xcconfig} react-native run-ios --simulator=\"${IOS_SIM:-iPhone 17e RNW}\" --port $(./scripts/metro-port.sh)",
     "worktree:ios": "./scripts/worktree-ios.sh",
     "worktree:metro": "npm run rn:start",

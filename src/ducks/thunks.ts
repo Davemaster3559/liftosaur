@@ -1263,6 +1263,10 @@ export function Thunk_startProgramDay(programId?: string): IThunk {
         const newProgress = Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats);
         updateState(dispatch, [lb<IState>().p("storage").p("progress").record([newProgress])], "Create new progress");
         dispatch(Thunk_log("ls-start-workout"));
+        // Let the new progress reach StateContext before mounting its screen.
+        // Native navigation can otherwise mount against the previous context and
+        // its missing-record fallback immediately redirects back to Today.
+        await new Promise((resolve) => setTimeout(resolve, 0));
         dispatch(Thunk_pushScreen("progress", { id: newProgress.id }, { tab: "workout" }));
       } else {
         Dialog_alert("No currently selected program");
