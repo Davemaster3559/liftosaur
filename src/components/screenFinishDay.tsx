@@ -46,6 +46,7 @@ import { LiftohistorySerializer_serialize } from "../liftohistory/liftohistorySe
 import { navigateToModal } from "../navigation/navigationService";
 import { DevFitFinish } from "../devfit/finishScreen";
 import { DevFitAction } from "../devfit/ui";
+import { DevFitConfig } from "../devfit/config";
 
 interface IProps {
   history: IHistoryRecord[];
@@ -304,22 +305,24 @@ function MobileShare(props: IMobileShareProps): JSX.Element {
           <Text className="text-xs text-text-secondary">More</Text>
         </View>
       </View>
-      <View className="items-center mt-1">
-        <LinkButton
-          name="copy-workout-link"
-          onPress={() => {
-            if (props.userId) {
-              const link = Share_generateLink(props.userId, props.record.id);
-              ClipboardUtils_copy(link);
-              Dialog_alert("Copied!");
-            } else {
-              Dialog_alert("You should be logged in to copy link to a workout");
-            }
-          }}
-        >
-          or just copy a link
-        </LinkButton>
-      </View>
+      {DevFitConfig.officialCloudEnabled && (
+        <View className="items-center mt-1">
+          <LinkButton
+            name="copy-workout-link"
+            onPress={() => {
+              if (props.userId) {
+                const link = Share_generateLink(props.userId, props.record.id);
+                ClipboardUtils_copy(link);
+                Dialog_alert("Copied!");
+              } else {
+                Dialog_alert("You should be logged in to copy link to a workout");
+              }
+            }}
+          >
+            or just copy a link
+          </LinkButton>
+        </View>
+      )}
     </View>
   );
 }

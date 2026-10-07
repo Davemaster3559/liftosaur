@@ -18,6 +18,7 @@ export function DevFitCardioTimer(props: {
   readySeconds?: number;
   sideLabel?: string;
   completed: boolean;
+  nextSide?: boolean;
   onStart: () => void;
   onRecord: () => void;
   onKeepTiming: () => void;
@@ -80,19 +81,21 @@ export function DevFitCardioTimer(props: {
       {ready ? (
         <DevFitAction label="Start now" testID="set-timer-start-now" onPress={props.onStart} />
       ) : (
-        !props.completed && (
+        (!props.completed || props.nextSide) && (
           <>
             <DevFitAction
-              label={`Stop & record · ${Session_minutes(props.elapsedSeconds)}`}
+              label={props.nextSide ? "Next side →" : `Stop & record · ${Session_minutes(props.elapsedSeconds)}`}
               testID="set-timer-stop-record"
               onPress={props.onRecord}
             />
-            <DevFitAction
-              label="Record time, keep going"
-              testID="set-timer-log-keep"
-              secondary
-              onPress={props.onKeepTiming}
-            />
+            {!props.completed && (
+              <DevFitAction
+                label="Record time, keep going"
+                testID="set-timer-log-keep"
+                secondary
+                onPress={props.onKeepTiming}
+              />
+            )}
           </>
         )
       )}

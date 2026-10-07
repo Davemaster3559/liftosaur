@@ -56,7 +56,7 @@ npm run test:devfit
 npm run test:devfit:render
 ```
 
-The offline lifecycle test logs a set, reloads persisted in-progress data, finishes the workout, reopens history and verifies real progression without any network calls. The domain suite has 275 tests, including the mixed rotation, recovery, DST dates, cardio totals, optional-settings JSON compatibility and actual saved progression targets. The 20 native interaction/render tests include Today → Start, edited keypad reps, rest controls, offline cardio recording, Schedule arrangement, retained grid performance, graphs and contextual Health Connect settings. These use mocked native bridges and do not prove OS behavior.
+The offline lifecycle test logs a set, reloads persisted in-progress data, finishes the workout, reopens history and verifies real progression without any network calls. The domain suite has 275 tests, including the mixed rotation, recovery, DST dates, cardio totals, optional-settings JSON compatibility and actual saved progression targets. The 22 native interaction/render tests include Today → Start, edited keypad reps, rest controls, offline cardio recording, unilateral side transitions, automatic cardio intervals, Schedule arrangement, retained grid performance, graphs and contextual Health Connect settings. These use mocked native bridges and do not prove OS behavior.
 
 CI also compiles native Android, verifies APK identity/signature and checks that the JavaScript bundle is embedded. Native runtime behavior still needs testing on a device: offline onboarding, workout completion/progression, force-stop/reopen persistence, background timers and notification actions, Health Connect permission flows, import/export, and folded/unfolded layouts.
 

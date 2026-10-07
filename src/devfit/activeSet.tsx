@@ -7,14 +7,16 @@ import { InputWeight2 } from "../components/inputWeight2";
 import { WorkoutExerciseSetRpeTime } from "../components/workoutExerciseSetFields";
 import { PlatesBar } from "../components/platesBar";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
-import { Weight_convertTo } from "../models/weight";
+import { Weight_convertTo, Weight_print } from "../models/weight";
+import { Exercise_get } from "../models/exercise";
 import { DevFitAction, DevFitSurface, DevFitTag } from "./ui";
-import { Session_minutes } from "./presentation";
+import { Session_kind, Session_minutes } from "./presentation";
 
 export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Element {
   const c = Tailwind_semantic().devfit;
   const { set, lastSet } = props;
   const timed = set.setTimer != null;
+  const kind = Session_kind(Exercise_get(props.exerciseType, props.settings.exercises).name);
   return (
     <DevFitSurface accent testID="devfit-active-set">
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
@@ -37,6 +39,11 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
           {set.completedSetTimer != null && (
             <Text className="text-center" style={{ color: c.success }}>
               Recorded {Session_minutes(set.completedSetTimer)}
+            </Text>
+          )}
+          {kind === "strength" && (set.completedWeight?.value ?? set.weight?.value ?? 0) > 0 && (
+            <Text className="text-center" style={{ color: c.ink }}>
+              Load · {Weight_print(set.completedWeight ?? set.weight!)}
             </Text>
           )}
         </View>

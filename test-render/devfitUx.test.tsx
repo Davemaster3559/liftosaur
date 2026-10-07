@@ -7,6 +7,7 @@ import { DevFitRotation_fixture } from "../test/fixtures/devfitRotation";
 import { navigationRef } from "../src/navigation/navigationRef";
 import { Program_nextHistoryRecord } from "../src/models/program";
 import { DevFitService } from "../src/devfit/service";
+import { Exercise_toKey } from "../src/models/exercise";
 
 describe("DevFit redesigned native flows", () => {
   for (const width of [360, 720, 960]) {
@@ -123,6 +124,62 @@ describe("DevFit redesigned native flows", () => {
       await app.settle();
       expect(screen.getAllByTestId("set-completed")).toHaveLength(1);
       expect(offline).not.toHaveBeenCalled();
+    } finally {
+      await app.unmount();
+    }
+  });
+
+  it("keeps the next-side control after recording a unilateral cardio segment", async () => {
+    const { program } = DevFitRotation_fixture();
+    program.nextDay = 1;
+    const state = Fixture_build({ program });
+    state.nosync = true;
+    const key = Exercise_toKey(state.storage.progress[0].entries[0].exercise);
+    state.storage.settings.exerciseData[key] = { ...state.storage.settings.exerciseData[key], isUnilateral: true };
+    state.storage.progress[0] = Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats);
+    const { env } = RenderEnv_build();
+    const app = await RenderApp_mount(state, env);
+    try {
+      await app.press("start-set-timer");
+      await app.settle();
+      if (screen.queryByTestId("set-timer-start-now")) {
+        await app.press("set-timer-start-now");
+      }
+      await app.press("set-timer-log-keep");
+      await app.settle();
+      expect(screen.getByRole("button", { name: "Next side →" })).toBeTruthy();
+      await app.press("set-timer-stop-record");
+      await app.settle();
+      expect(screen.getByText("Right side")).toBeTruthy();
+      if (screen.queryByTestId("set-timer-start-now")) {
+        await app.press("set-timer-start-now");
+      }
+      await app.press("set-timer-stop-record");
+      await app.settle();
+      expect(screen.getAllByTestId("set-completed")).toHaveLength(1);
+    } finally {
+      await app.unmount();
+    }
+  });
+
+  it("automatically records and advances cardio intervals without a weight prompt", async () => {
+    const { program } = DevFitRotation_fixture();
+    program.nextDay = 5;
+    const state = Fixture_build({ program });
+    state.nosync = true;
+    state.storage.settings.timers.getReady = 0;
+    const entry = state.storage.progress[0].entries[0];
+    entry.sets = entry.sets.slice(0, 3).map((set) => ({ ...set, setTimer: 1, timer: 0, auto: true }));
+    const { env } = RenderEnv_build();
+    const app = await RenderApp_mount(state, env);
+    try {
+      await app.press("start-set-timer");
+      for (let i = 0; i < 13; i += 1) {
+        await app.settle();
+      }
+      expect(screen.queryByTestId("modal-amrap-weight-input")).toBeNull();
+      expect(screen.getAllByTestId("set-completed")).toHaveLength(3);
+      expect(screen.getByText("Good work. Keep moving.")).toBeTruthy();
     } finally {
       await app.unmount();
     }

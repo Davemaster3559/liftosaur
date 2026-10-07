@@ -174,6 +174,7 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
         readySeconds={isGetReady ? getReadyLeft : undefined}
         sideLabel={sideLabel}
         completed={isCompleted}
+        nextSide={isLeft && recordedThisSide}
         onStart={onStartNow}
         onRecord={onStopAndRecord}
         onKeepTiming={onLogKeepTiming}
