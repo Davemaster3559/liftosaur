@@ -311,6 +311,8 @@ describe("DevFit v0.3 gym flow", () => {
     entry.warmupSets[1].isCompleted = true;
     progress.timerSetIndex = 1;
     expect(RestTimerProgress_context(progress, settings).next).to.include("Set 1 · 100lb · 5 reps");
+    entry.sets[0].setTimer = 30;
+    expect(RestTimerProgress_context(progress, settings).next).to.include("Set 1 · 0:30");
   });
 
   it("reaches zero, retains overtime and emits one foreground cue across pause and rest adjustments", () => {

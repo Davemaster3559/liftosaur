@@ -35,7 +35,7 @@ export function RestTimerProgress_context(
   const nextSet = nextEntry?.[warmup ? "warmupSets" : "sets"][nextIndex];
   const target =
     nextSet?.setTimer != null
-      ? `${Math.round(nextSet.setTimer / 60)} min`
+      ? `${Math.floor(nextSet.setTimer / 60)}:${String(Math.floor(nextSet.setTimer % 60)).padStart(2, "0")}${nextSet.isUnilateral ? " per side" : ""}`
       : nextSet
         ? `${nextSet.weight ? `${Weight_print(nextSet.weight)} · ` : ""}${nextSet.minReps != null ? `${nextSet.minReps}–` : ""}${nextSet.reps ?? "AMRAP"} reps`
         : undefined;
