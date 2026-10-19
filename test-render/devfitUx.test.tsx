@@ -134,6 +134,9 @@ describe("DevFit redesigned native flows", () => {
       await app.press("devfit-workout-pause-resume");
       await app.press("set-timer-stop-record");
       await app.settle();
+      if (screen.queryByTestId("devfit-cardio-form")) {
+        await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+      }
       expect(screen.getAllByTestId("set-completed")).toHaveLength(1);
       expect(offline).not.toHaveBeenCalled();
     } finally {
@@ -188,6 +191,9 @@ describe("DevFit redesigned native flows", () => {
       await app.press("start-set-timer");
       for (let i = 0; i < 13; i += 1) {
         await app.settle();
+      }
+      if (screen.queryByTestId("devfit-cardio-form")) {
+        await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
       }
       expect(screen.queryByTestId("modal-amrap-weight-input")).toBeNull();
       expect(screen.getAllByTestId("set-completed")).toHaveLength(3);
@@ -252,7 +258,7 @@ describe("DevFit redesigned native flows", () => {
     const state = Fixture_build({ program, ongoingWorkout: false });
     state.nosync = true;
     state.storage.settings.devfitSchedules = {
-      [program.id]: Schedule_anchor(schedule, 10, Date.now()),
+      [program.id]: Schedule_anchor(schedule, 8, Date.now()),
     };
     const { env } = RenderEnv_build();
     const app = await RenderApp_mount(state, env, { start: "home" });

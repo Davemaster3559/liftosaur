@@ -135,6 +135,8 @@ export function Reps_addSet(
         completedRpe: undefined,
         completedSetTimer: undefined,
         completedSetTimerLeft: undefined,
+        devfitCardio: undefined,
+        cardioLaps: undefined,
       };
     }
   }

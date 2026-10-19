@@ -20,7 +20,11 @@ export function Analytics_summary(
   calendarCycleDays?: number;
 } {
   const cycleDays = settings.devfitCycleDays ?? (program ? Schedule_get(program, settings).cycleDays : 14);
-  const cycleSettings = { ...settings, devfitCycleDays: cycleDays };
+  const cycleSettings = {
+    ...settings,
+    devfitCycleDays: cycleDays,
+    devfitSchedules: program ? { [program.id]: Schedule_get(program, settings) } : settings.devfitSchedules,
+  };
   const records = Cycle_records(history, Cycle_range(cycleSettings, now));
   const completed = { strength: 0, running: 0, cardio: 0 };
   let cardioSeconds = 0;

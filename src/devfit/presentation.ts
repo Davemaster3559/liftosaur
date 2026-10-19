@@ -1,6 +1,7 @@
 import { IHistoryEntry, IHistoryRecord, ISettings, ISet } from "../types";
 import { Exercise_get } from "../models/exercise";
 import { Weight_build } from "../models/weight";
+import { Cardio_duration } from "./cardio";
 import { IEvaluatedProgramDay, Program_getProgramDayUsedExercises, Program_dayApproxTimeMs } from "../models/program";
 import { IPlannerProgramExercise } from "../pages/planner/models/types";
 import {
@@ -58,8 +59,13 @@ export function Session_exerciseKind(
   entry?: IHistoryEntry,
   settings?: ISettings
 ): ISessionKind {
+  const cardio = entry?.sets.find((s) => s.devfitCardio)?.devfitCardio;
   const name = exercise?.name ?? (entry && settings ? Exercise_get(entry.exercise, settings.exercises).name : "");
-  return Session_kind(name, [exercise?.label ?? "", ...(entry?.sets.map((s) => s.label ?? "") ?? [])]);
+  const classified = Session_kind(name, [exercise?.label ?? "", ...(entry?.sets.map((s) => s.label ?? "") ?? [])]);
+  if (cardio) {
+    return cardio.runPlan || (cardio.kind === "treadmill" && classified === "running") ? "running" : "cardio";
+  }
+  return classified;
 }
 
 export function Session_day(
@@ -219,6 +225,10 @@ export function Session_switchPhase(set: ISet, elapsedSeconds: number): ISet {
     cardioLaps: [
       ...(set.cardioLaps ?? []),
       {
+        ...set.cardioLaps
+          ?.slice()
+          .reverse()
+          .find((l) => l.phase === (current.phase === "walk" ? "jog" : "walk")),
         phase: current.phase === "walk" ? "jog" : "walk",
         elapsedSeconds: Math.max(last?.elapsedSeconds ?? 0, Math.floor(elapsedSeconds), 0),
       },
@@ -227,12 +237,10 @@ export function Session_switchPhase(set: ISet, elapsedSeconds: number): ISet {
 }
 
 export function Session_setDuration(
-  set: Pick<ISet, "setTimer" | "isUnilateral" | "completedSetTimer" | "completedSetTimerLeft">,
+  set: Pick<ISet, "setTimer" | "isUnilateral" | "completedSetTimer" | "completedSetTimerLeft" | "devfitCardio">,
   completed = false
 ): number {
-  return completed
-    ? (set.completedSetTimer ?? 0) + (set.completedSetTimerLeft ?? 0)
-    : (set.setTimer ?? 0) * (set.isUnilateral ? 2 : 1);
+  return completed ? Cardio_duration(set) : (set.setTimer ?? 0) * (set.isUnilateral ? 2 : 1);
 }
 
 export function Session_recordedSeconds(entries: IHistoryEntry[]): number {

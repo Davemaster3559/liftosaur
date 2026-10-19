@@ -17,7 +17,7 @@ describe("DevFit schedule and workout presentation", () => {
   const { program, schedule } = DevFitRotation_fixture();
   const settings = { ...Settings_build(), devfitSchedules: { [program.id]: schedule } };
   const evaluated = Program_evaluate(program, settings);
-  const now = new Date(2026, 9, 7, 12).getTime();
+  const now = new Date(2026, 9, 9, 12).getTime();
   it("evaluates a mixed rotation using the real planner", () => {
     expect(evaluated.errors).to.deep.equal([]);
     expect(Session_day(Program_getProgramDay(evaluated, 1)!, settings).kind).to.equal("running");
@@ -55,7 +55,7 @@ describe("DevFit schedule and workout presentation", () => {
     );
     expect(copy.devfitSchedules![program.id]).to.deep.equal(config);
     expect(v.parse(VSettings, Settings_build()).devfitSchedules).to.equal(undefined);
-    expect(schedule.days.some((s) => s.day === 5)).to.equal(false);
+    expect(schedule.days.find((s) => s.day === 5)?.programDay).to.equal(4);
   });
   it("matches completion to this cycle's date, rather than weekday or any historical session", () => {
     const record = Program_nextHistoryRecord(program, settings, Stats_getEmpty());
@@ -86,9 +86,9 @@ describe("DevFit schedule and workout presentation", () => {
     expect(summary.completed.cardio).to.equal(1);
     expect(summary.cardioSeconds).to.equal(1200);
     expect(summary.sets.total).to.equal(24);
-    expect(summary.planned.running).to.equal(2);
-    expect(summary.planned.strength).to.equal(4);
-    expect(summary.plannedCardioSeconds).to.equal(147 * 60);
+    expect(summary.planned.running).to.equal(4);
+    expect(summary.planned.strength).to.equal(6);
+    expect(summary.plannedCardioSeconds).to.equal(224 * 60);
     const older = { ...record, id: -1, startTime: now - 30 * 86400000 };
     const withPrevious = Analytics_summary([record, older], settings, Stats_getEmpty(), evaluated, now);
     expect(withPrevious.trends.length).to.be.greaterThan(0);

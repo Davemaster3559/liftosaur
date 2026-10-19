@@ -2,6 +2,16 @@
 import * as v from "valibot";
 import { IVersions, IVersionTypes } from "./models/versionTracker/types";
 import { IEquals } from "./utils/types";
+import {
+  ICardioActivity,
+  IScheduleCredit,
+  VCardioActivity,
+  VCardioLap,
+  VCardioPhaseSettings,
+  VScheduleCredit,
+  ICardioEntryDetails,
+  VCardioEntryDetails,
+} from "./devfit/cardioSchema";
 
 export const equipments = [
   "barbell",
@@ -492,7 +502,8 @@ export interface ISet {
   completedRpe?: number;
   completedSetTimer?: number;
   completedSetTimerLeft?: number;
-  cardioLaps?: { phase: "walk" | "jog"; elapsedSeconds: number }[];
+  cardioLaps?: v.InferOutput<typeof VCardioLap>[];
+  devfitCardio?: ICardioActivity;
   programSetIndex?: number;
 }
 const _VSet = v.object({
@@ -521,7 +532,8 @@ const _VSet = v.object({
   completedRpe: v.optional(v.number()),
   completedSetTimer: v.optional(v.number()),
   completedSetTimerLeft: v.optional(v.number()),
-  cardioLaps: v.optional(v.array(v.object({ phase: v.picklist(["walk", "jog"]), elapsedSeconds: v.number() }))),
+  cardioLaps: v.optional(v.array(VCardioLap)),
+  devfitCardio: v.optional(VCardioActivity),
   programSetIndex: v.optional(v.number()),
 });
 const _VSetMatches: IEquals<v.InferOutput<typeof _VSet>, ISet> = true;
@@ -555,6 +567,7 @@ export interface IHistoryEntry {
   vtype: "history_entry";
   exercise: IExerciseType;
   sets: ISet[];
+  devfitCardioDetails?: ICardioEntryDetails;
   warmupSets: ISet[];
   index: number;
   id: string;
@@ -573,6 +586,7 @@ const _VHistoryEntry = v.object({
   vtype: v.literal("history_entry"),
   exercise: VExerciseType,
   sets: v.array(VSet),
+  devfitCardioDetails: v.optional(VCardioEntryDetails),
   warmupSets: v.array(VSet),
   index: v.number(),
   id: v.string(),
@@ -975,6 +989,7 @@ export interface IHistoryRecord {
   programName: string;
   day: number;
   catchUpFor?: string;
+  devfitScheduleCredit?: IScheduleCredit;
   dayName: string;
   entries: IHistoryEntry[];
   startTime: number;
@@ -1002,6 +1017,7 @@ export interface IHistoryRecord {
     id: string;
     side: ITimedSetSide;
     startedAt: number;
+    performedAt?: number;
     nonce?: number;
     keepTiming?: boolean;
     preserveRest?: boolean;
@@ -1048,6 +1064,7 @@ const _VHistoryRecord = v.object({
   programName: v.string(),
   day: v.number(),
   catchUpFor: v.optional(v.string()),
+  devfitScheduleCredit: v.optional(VScheduleCredit),
   dayName: v.string(),
   entries: v.array(VHistoryEntry),
   startTime: v.number(),
@@ -1073,6 +1090,7 @@ const _VHistoryRecord = v.object({
       id: v.string(),
       side: VTimedSetSide,
       startedAt: v.number(),
+      performedAt: v.optional(v.number()),
       nonce: v.optional(v.number()),
       keepTiming: v.optional(v.boolean()),
       preserveRest: v.optional(v.boolean()),
@@ -1627,6 +1645,9 @@ export const VDevFitSchedule = v.object({
   setupDismissed: v.optional(v.boolean()),
   cycleDays: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
   anchorDate: v.optional(v.string()),
+  homeTimeZone: v.optional(v.string()),
+  referenceSource: v.optional(v.picklist(["confirmed", "personal_oct7"])),
+  personalRotation: v.optional(v.boolean()),
   days: v.array(
     v.object({
       day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
@@ -1689,6 +1710,10 @@ export interface ISettings {
   devfitCycleDays?: number;
   devfitCycleTarget?: number;
   devfitSchedules?: Record<string, IDevFitSchedule>;
+  devfitCardioSuggestions?: {
+    walk?: v.InferOutput<typeof VCardioPhaseSettings>;
+    jog?: v.InferOutput<typeof VCardioPhaseSettings>;
+  };
   affiliateEnabled?: boolean;
 }
 const _VSettings = v.object({
@@ -1743,6 +1768,9 @@ const _VSettings = v.object({
   devfitCycleDays: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
   devfitCycleTarget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
   devfitSchedules: v.optional(v.record(v.string(), VDevFitSchedule)),
+  devfitCardioSuggestions: v.optional(
+    v.object({ walk: v.optional(VCardioPhaseSettings), jog: v.optional(VCardioPhaseSettings) })
+  ),
   affiliateEnabled: v.optional(v.boolean()),
 });
 const _VSettingsMatches: IEquals<v.InferOutput<typeof _VSettings>, ISettings> = true;
@@ -2039,8 +2067,10 @@ export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
     "setTimerGetReady",
     "amrapModal",
     "currentEntryIndex",
+    "devfitScheduleCredit",
   ] as const,
   history_entry: [
+    "devfitCardioDetails",
     "exercise",
     "sets",
     "warmupSets",

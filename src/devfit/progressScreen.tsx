@@ -9,12 +9,17 @@ import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { Analytics_summary } from "./analytics";
 import { DevFitAction, DevFitBar, DevFitColumns, DevFitMetric, DevFitSection, DevFitSurface, DevFitTitle } from "./ui";
 import { DevFitPage } from "./page";
+import { DevFitCardioCharts } from "./cardioCharts";
+import { DevFitCardioLog } from "./cardioLog";
+import { IDispatch } from "../ducks/types";
+import { Schedule_slots } from "./schedule";
 
 export function DevFitProgress(props: {
   history: IHistoryRecord[];
   settings: ISettings;
   stats: IStats;
   program?: IProgram;
+  dispatch?: IDispatch;
   onGraphs: () => void;
   onMeasurements: () => void;
   onInsights: () => void;
@@ -36,6 +41,35 @@ export function DevFitProgress(props: {
         title="Progress"
         subtitle={`Last ${summary.range.days} days · ${summary.records.length} completed sessions`}
       />
+      {props.dispatch && (
+        <DevFitCardioLog
+          history={props.history}
+          settings={props.settings}
+          dispatch={props.dispatch}
+          program={props.program}
+        />
+      )}
+      <DevFitCardioCharts history={props.history} settings={props.settings} />
+      {evaluated && (
+        <DevFitSurface>
+          <Text style={{ color: c.ink }}>Current rotation · planned / performed</Text>
+          {Schedule_slots(evaluated, props.settings, props.history, Date.now())
+            .filter((s) => s.session)
+            .map((s) => (
+              <Text key={s.day} style={{ color: c.muted }}>
+                Day {s.day} · {s.session!.name}:{" "}
+                {s.completed
+                  ? s.completedLate
+                    ? "explicit late credit"
+                    : "completed"
+                  : s.missed
+                    ? "not logged"
+                    : "planned"}
+                {s.performed.length ? ` · performed ${s.performed.map((r) => r.dayName).join(", ")}` : ""}
+              </Text>
+            ))}
+        </DevFitSurface>
+      )}
       <DevFitSurface>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
           <DevFitMetric label="Working sets" value={`${summary.sets.total}`} />
@@ -145,7 +179,8 @@ export function DevFitProgress(props: {
                   count toward duration.
                 </Text>
                 <Text className="text-xs" style={{ color: c.muted }}>
-                  Adherence and duration help you build consistency. Distance, pace and GPS are not recorded.
+                  Actual timed or manually reported duration counts once. Optional machine measurements appear in cardio
+                  progress.
                 </Text>
               </DevFitSurface>
             </DevFitSection>

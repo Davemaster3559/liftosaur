@@ -27,6 +27,8 @@ import { History_clockNow, History_isActivelyPaused } from "../models/history";
 import { DevFitAction } from "../devfit/ui";
 import { lb } from "lens-shmens";
 import { updateProgress } from "../models/state";
+import { Cardio_phaseSetting } from "../devfit/cardio";
+import { CardioActions_phase } from "../devfit/cardioActions";
 
 // Re-renders the clock every 250ms and calls onTick so `auto` circuits advance/complete on time. All the
 // advance/complete/rest logic lives in the model (Progress_checkSetTimer) — this just provides the clock tick.
@@ -68,6 +70,26 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
   const entry = progress.entries[entryIndex];
   const set = entry?.sets[setIndex];
   const paused = History_isActivelyPaused(progress.intervals);
+  useEffect(() => {
+    if (
+      !isPlayground &&
+      set &&
+      entry.sets.length === 1 &&
+      !isGetReady &&
+      Session_exerciseKind(props.programExercise, entry, settings) === "running"
+    ) {
+      dispatch(
+        CardioActions_phase({
+          entryIndex,
+          setIndex,
+          phaseId: setTimerModal.id,
+          setId: set.id,
+          expectedPhase: "walk",
+          kind: "begin",
+        })
+      );
+    }
+  }, [isGetReady, set?.id, startedAt]);
 
   useSetTimerTick(set != null && !paused, () => {
     if (isPlayground) {
@@ -199,18 +221,70 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
           nextSide={isLeft && recordedThisSide}
           paused={paused}
           onResume={onResume}
-          onSwitchPhase={() =>
-            updateProgress(
-              dispatch,
-              lb<IHistoryRecord>()
-                .p("entries")
-                .i(entryIndex)
-                .p("sets")
-                .i(setIndex)
-                .recordModify((s) => Session_switchPhase(s, elapsedMs / 1000)),
-              "Switch running phase"
+          onBeginPhase={(initialPhase) =>
+            dispatch(
+              CardioActions_phase({
+                entryIndex,
+                setIndex,
+                phaseId: setTimerModal.id,
+                setId: set.id,
+                expectedPhase: "walk",
+                kind: "begin",
+                initialPhase,
+              })
             )
           }
+          onPhaseSettings={(value) => {
+            if (!isPlayground) {
+              dispatch(
+                CardioActions_phase({
+                  entryIndex,
+                  setIndex,
+                  phaseId: setTimerModal.id,
+                  setId: set.id,
+                  expectedPhase: set.cardioLaps?.slice(-1)[0]?.phase ?? "walk",
+                  kind: "settings",
+                  value,
+                })
+              );
+            } else {
+              updateProgress(
+                dispatch,
+                lb<IHistoryRecord>()
+                  .p("entries")
+                  .i(entryIndex)
+                  .p("sets")
+                  .i(setIndex)
+                  .recordModify((s) => Cardio_phaseSetting(s, elapsedMs / 1000, value)),
+                "Record actual phase settings"
+              );
+            }
+          }}
+          onSwitchPhase={() => {
+            if (!isPlayground) {
+              dispatch(
+                CardioActions_phase({
+                  entryIndex,
+                  setIndex,
+                  phaseId: setTimerModal.id,
+                  setId: set.id,
+                  expectedPhase: set.cardioLaps?.slice(-1)[0]?.phase ?? "walk",
+                  kind: "switch",
+                })
+              );
+            } else {
+              updateProgress(
+                dispatch,
+                lb<IHistoryRecord>()
+                  .p("entries")
+                  .i(entryIndex)
+                  .p("sets")
+                  .i(setIndex)
+                  .recordModify((s) => Session_switchPhase(s, elapsedMs / 1000)),
+                "Switch running phase"
+              );
+            }
+          }}
           onStart={onStartNow}
           onRecord={onStopAndRecord}
           onKeepTiming={onLogKeepTiming}

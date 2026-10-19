@@ -23,6 +23,9 @@ import { StringUtils_pluralize } from "../utils/string";
 import { n } from "../utils/math";
 import { IEvaluatedProgramDay } from "../models/program";
 import { Thunk_startProgramDay, Thunk_editHistoryRecord } from "../ducks/thunks";
+import { DevFitCardioLog } from "../devfit/cardioLog";
+import { CardioProgress_details } from "../devfit/cardioProgress";
+import { Dates_label } from "../devfit/dates";
 
 interface IProps {
   historyRecord: IHistoryRecord;
@@ -54,6 +57,33 @@ export const HistoryRecordView = memo((props: IProps): JSX.Element => {
 
   const entries = historyRecord.entries;
   const supersetToColor = useMemo(() => Progress_getSupersetToColor(entries), [entries]);
+  const manual = historyRecord.source === "devfit_manual" ? entries[0]?.sets[0]?.devfitCardio : undefined;
+  if (manual) {
+    return (
+      <View
+        testID="history-record"
+        className="m-2 gap-3 rounded-2xl border border-border-cardpurple bg-background-cardpurple p-4"
+      >
+        <Text className="text-base font-semibold">{historyRecord.dayName} · Manually logged</Text>
+        <Text>
+          {Dates_label(manual.performedLocalDate)}
+          {manual.performedLocalTime ? ` · ${manual.performedLocalTime}` : " · date only"}
+        </Text>
+        {CardioProgress_details(manual).map(([label, value]) => (
+          <Text key={label}>
+            {label}: {value}
+          </Text>
+        ))}
+        <DevFitCardioLog
+          compact
+          editRecord={historyRecord}
+          history={[historyRecord]}
+          settings={props.settings}
+          dispatch={dispatch}
+        />
+      </View>
+    );
+  }
 
   const handleCardPress = (): void => {
     if (Progress_isCurrent(historyRecord)) {

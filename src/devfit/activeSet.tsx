@@ -207,7 +207,9 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
           set.isCompleted
             ? "Undo completion"
             : timed
-              ? "Start timer  ▶"
+              ? kind === "running" || /run[ _-]*[ab]\d*/i.test(set.label ?? "")
+                ? "Start run  ▶"
+                : "Start timer  ▶"
               : props.preserveRest
                 ? "Log set · keep current rest"
                 : "Complete set  ✓"

@@ -16,9 +16,10 @@ export function NavScreenGraphs(): JSX.Element {
   const state = useTrackedState();
   const dispatch = useTrackedDispatch();
   const [graphs, setGraphs] = useState(false);
-  if (!graphs)
+  if (!graphs) {
     return (
       <DevFitProgress
+        dispatch={dispatch}
         history={untrack(state.storage.history)}
         settings={untrack(state.storage.settings)}
         stats={untrack(state.storage.stats)}
@@ -35,6 +36,7 @@ export function NavScreenGraphs(): JSX.Element {
         }
       />
     );
+  }
   return (
     <NavScreenContent>
       <DevFitAction label="Back to Progress" secondary onPress={() => setGraphs(false)} />

@@ -81,6 +81,9 @@ import {
 import { INativeEffect } from "./nativeEffects";
 import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { WorkoutFocus_shouldStartRest } from "../devfit/workoutFocus";
+import { Cardio_liveSet } from "../devfit/cardio";
+import { Dates_key } from "../devfit/dates";
+import { Session_exerciseKind, Session_timedRecordingSet } from "../devfit/presentation";
 import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { IPercentage, IScriptErrorHandler, ITimedSetSide } from "../types";
 import { TimedSet_open, TimedSet_recordedFor } from "./timedSet";
@@ -706,6 +709,7 @@ export function Progress_resumeWorkout(
     timerSince: progress.timerSince == null ? undefined : progress.timerSince + shift,
     setTimer: progress.setTimer && {
       ...progress.setTimer,
+      performedAt: progress.setTimer.performedAt ?? progress.setTimer.startedAt,
       startedAt: progress.setTimer.startedAt + shift,
       id: shift > 0 ? UidFactory_generateUid(8) : progress.setTimer.id,
     },
@@ -1253,7 +1257,12 @@ export function Progress_completeSet(
       nonce: now,
     });
     if (opened != null) {
-      const restarted = lf(progress).p("entries").i(entryIndex).p("sets").i(setIndex).p("cardioLaps").set(undefined);
+      const restarted = lf(progress)
+        .p("entries")
+        .i(entryIndex)
+        .p("sets")
+        .i(setIndex)
+        .modify((s) => ({ ...s, cardioLaps: undefined, devfitCardio: undefined }));
       return { ...restarted, setTimer: undefined, setTimerGetReady: undefined, ...opened };
     }
   }
@@ -1379,6 +1388,16 @@ export function Progress_startSetTimerWork(progress: IHistoryRecord, startedAt: 
   if (getReady == null || progress.setTimer != null) {
     return progress;
   }
+  const starting = progress.entries[getReady.entryIndex]?.sets[getReady.setIndex]?.devfitCardio;
+  if (starting && starting.actualDurationSeconds === 0) {
+    progress = lf(progress)
+      .p("entries")
+      .i(getReady.entryIndex)
+      .p("sets")
+      .i(getReady.setIndex)
+      .p("devfitCardio")
+      .set({ ...starting, performedLocalDate: Dates_key(startedAt, starting.timeZone) });
+  }
   return {
     ...progress,
     setTimerGetReady: undefined,
@@ -1389,6 +1408,7 @@ export function Progress_startSetTimerWork(progress: IHistoryRecord, startedAt: 
       id: getReady.id,
       side: getReady.side,
       startedAt,
+      performedAt: startedAt,
       // Reusing the nonce is what stops the presenter re-navigating on the flip.
       nonce: getReady.nonce,
       ...(getReady.preserveRest != null ? { preserveRest: getReady.preserveRest } : {}),
@@ -1617,6 +1637,19 @@ export function Progress_closeTimedSet(
   if (stm == null) {
     return progress.setTimerGetReady != null ? { ...progress, setTimerGetReady: undefined } : progress;
   }
+  const activeSet = progress.entries[stm.entryIndex]?.sets[stm.setIndex];
+  if (activeSet?.id !== stm.setId) {
+    return { ...progress, setTimer: undefined, setTimerGetReady: undefined };
+  }
+  if (activeSet?.isCompleted) {
+    progress = Progress_captureCardio(
+      progress,
+      stm.entryIndex,
+      stm.setIndex,
+      Math.round((History_clockNow(progress) - stm.startedAt) / 1000),
+      settings
+    );
+  }
   let newProgress: IHistoryRecord = { ...progress, setTimer: undefined, setTimerGetReady: undefined };
   const set = newProgress.entries[stm.entryIndex]?.sets[stm.setIndex];
   // The playground has no rest timers, so discarding a "Log & keep timing" set just closes the banner.
@@ -1708,7 +1741,10 @@ export function Progress_checkSetTimer(
     // No !isCompleted guard: a "Log & keep timing" set is already completed but keeps the clock running, and
     // must still auto-close + rest at the target. completeSetAction's already-logged branch handles it.
     if (set?.setTimer != null && !set.isOverflowSetTimer && now - stm.startedAt >= set.setTimer * 1000) {
-      const recordedSeconds = TimedSet_recordedFor(set, stm.side) ?? set.setTimer;
+      const recordedSeconds =
+        Session_exerciseKind(programExercise, current.entries[stm.entryIndex], settings) !== "strength"
+          ? set.setTimer
+          : (TimedSet_recordedFor(set, stm.side) ?? set.setTimer);
       return Progress_completeSetAction(
         effects,
         settings,
@@ -2538,6 +2574,29 @@ export function Progress_settleTimedSet(
   return current;
 }
 
+function Progress_captureCardio(
+  progress: IHistoryRecord,
+  entryIndex: number,
+  setIndex: number,
+  seconds: number,
+  settings: ISettings,
+  exercise?: IPlannerProgramExercise
+): IHistoryRecord {
+  const entry = progress.entries[entryIndex];
+  if (!entry || Session_exerciseKind(exercise, entry, settings) === "strength") {
+    return progress;
+  }
+  const text = `${exercise?.label ?? ""} ${exercise?.name ?? ""} ${entry.sets[setIndex].label ?? ""} ${Exercise_get(entry.exercise, settings.exercises).name}`;
+  return lf(progress)
+    .p("entries")
+    .i(entryIndex)
+    .p("sets")
+    .i(setIndex)
+    .modify((s) =>
+      Cardio_liveSet(s, progress, text, seconds, settings.devfitSchedules?.[progress.programId]?.homeTimeZone)
+    );
+}
+
 export function Progress_completeSetAction(
   effects: INativeEffect[],
   settings: ISettings,
@@ -2593,6 +2652,9 @@ export function Progress_completeSetAction(
     return progress;
   }
   const oldSet = progress.entries[action.entryIndex][action.mode === "warmup" ? "warmupSets" : "sets"][action.setIndex];
+  if (wasSetTimerOpen && setTimerModal?.setId !== oldSet.id) {
+    return progress;
+  }
   if (
     oldSet?.setTimer != null &&
     !wasSetTimerOpen &&
@@ -2602,6 +2664,25 @@ export function Progress_completeSetAction(
   }
   const timedSide = setTimerModal?.side ?? "bilateral";
   const recordedThisSide = TimedSet_recordedFor(oldSet, timedSide);
+  const isCardio =
+    Session_exerciseKind(action.programExercise, progress.entries[action.entryIndex], settings) !== "strength" &&
+    !oldSet.isUnilateral;
+  if (wasSetTimerOpen && setTimerModal && isCardio) {
+    progress = lf(progress)
+      .p("entries")
+      .i(action.entryIndex)
+      .p("sets")
+      .i(action.setIndex)
+      .modify((s) => Session_timedRecordingSet(s, "cardio", settings));
+    progress = Progress_captureCardio(
+      progress,
+      action.entryIndex,
+      action.setIndex,
+      action.recordedSeconds ?? Math.round((History_clockNow(progress) - setTimerModal.startedAt) / 1000),
+      settings,
+      action.programExercise
+    );
+  }
 
   if (wasSetTimerOpen && setTimerModal != null && timedSide === "left") {
     const recorded =
@@ -2659,7 +2740,9 @@ export function Progress_completeSetAction(
   // recorded time and close/keep the banner — don't run completion, which would toggle the set off.
   if (wasSetTimerOpen && setTimerModal != null && oldSet.isCompleted) {
     const recorded =
-      recordedThisSide ?? action.recordedSeconds ?? Math.round((Date.now() - setTimerModal.startedAt) / 1000);
+      (isCardio ? progress.entries[action.entryIndex].sets[action.setIndex].completedSetTimer : recordedThisSide) ??
+      action.recordedSeconds ??
+      Math.round((Date.now() - setTimerModal.startedAt) / 1000);
     let stopped = lf(progress)
       .p("entries")
       .i(action.entryIndex)
@@ -2738,6 +2821,23 @@ export function Progress_completeSetAction(
     startedTimer?.entryIndex === action.entryIndex &&
     startedTimer?.setIndex === action.setIndex;
   if (justStartedSetTimer) {
+    if (isCardio) {
+      const begun = Progress_captureCardio(
+        newProgress,
+        action.entryIndex,
+        action.setIndex,
+        0,
+        settings,
+        action.programExercise
+      );
+      newProgress = lf(newProgress)
+        .p("entries")
+        .i(action.entryIndex)
+        .p("sets")
+        .i(action.setIndex)
+        .p("devfitCardio")
+        .set(begun.entries[action.entryIndex].sets[action.setIndex].devfitCardio);
+    }
     newProgress = {
       ...newProgress,
       intervals: History_resumeWorkout(
@@ -2885,6 +2985,20 @@ export function Progress_finishWorkout(
   progress: IHistoryRecord
 ): IStorage {
   const settings = storage.settings;
+  const clock = progress.setTimer;
+  if (
+    clock &&
+    progress.entries[clock.entryIndex]?.sets[clock.setIndex]?.id === clock.setId &&
+    progress.entries[clock.entryIndex]?.sets[clock.setIndex]?.isCompleted
+  ) {
+    progress = Progress_captureCardio(
+      progress,
+      clock.entryIndex,
+      clock.setIndex,
+      Math.round((History_clockNow(progress) - clock.startedAt) / 1000),
+      settings
+    );
+  }
   const programIndex = storage.programs.findIndex((p) => p.id === progress.programId)!;
   const program = progress.programId === emptyProgramId ? Program_createEmptyProgram() : storage.programs[programIndex];
   const evaluatedProgram = program ? Program_evaluate(program, settings) : undefined;

@@ -4,7 +4,7 @@ Personal Android fork of [Liftosaur](https://github.com/astashov/liftosaur), bas
 
 DevFit uses package `com.devfit.app` and installs alongside Liftosaur. The internal React Native component retains its upstream name so native registration remains compatible.
 
-## DevFit 0.3 experience
+## DevFit 0.4 experience
 
 Today, Schedule, Progress and Me are the primary destinations. An active workout remains one tap away. The dark-first interface uses original DevFit surfaces, readable targets and large controls, with a light theme as well.
 
@@ -19,7 +19,17 @@ Today, Schedule, Progress and Me are the primary destinations. An active workout
 
 Compact screens use one column. Unfolded screens from 700 logical pixels use a useful primary/secondary split; larger text can return to one column. Resizing retains the active workout and edits.
 
-The 14-day mixed upper/lower and running rotation is covered by an isolated example fixture. It is never installed into user data. Import your actual program and arrange its calendar; no missing weights, exercises or progression rules are invented.
+The personal continental rotation recognizes Run A/B, Upper/Lower A/B and Endurance sessions. Its confirmed reference is October 7, 2026, Day 1 in America/Edmonton. October 18 is Day 12, Work, Run B. October 21 wraps to Day 1. Recognition uses session roles and a persisted program marker, so renaming the program cannot shift it. Saved day assignments and Work/Off labels remain intact. A previously unverified personal reference is reconciled once. Later user-confirmed corrections remain authoritative. Other unknown rotations receive a confidence explanation and one confirmation, with a dismiss option.
+
+Past activities are available from Today, History, Schedule and Progress. Choose the performed date, type and actual minutes. Optional quick summaries and detailed treadmill phases retain independent Walk/Jog speed and percent grade, distance, longest jog, effort and shin feedback. Stairs use reported steps/cadence/level/floors. Bike uses virtual distance, resistance, RPM and watts. Row uses distance, split, stroke rate, watts and damper. Machine profiles are optional. Unknown values stay unknown. Manual activities can be reopened, corrected or deleted. Similar same-day recordings warn but can remain separate activities.
+
+Manual saves insert completed history through the normal versioned local storage update. They never enter the live workout finish path, advance the program, run progression or write to Health Connect. Date precision prevents displaying an invented start time. Calendar grouping uses the performed local date, including when travelling. A scheduled instance requires an exact date and intended session match, or an explicit credit. Late Upper A on October 10 and Upper B on October 15 stay mismatches. History dates and the current rotation never move to accommodate them.
+
+Live recording retains the existing timed-set engine and native clocks. Single-set runs begin in Walk and provide large Walk/Jog switches. Structured multi-set runs ask which actual phase is being performed instead of guessing. Confirmed speed/grade changes create boundaries in active work time. Walk and Jog suggestions are remembered separately and require confirmation before becoming measurements. Pauses and get-ready time are excluded. Auto circuits retain successor clocks and recovery timers. Finish details appear after the final set when no auto successor is pending. Recorded details can also be edited in the workout. Recovery timers remain separate from recorded work duration.
+
+Progress separates treadmill, stairs, bike, row, elliptical and other activities. Select the metric, machine profile and reporting completeness. Missing points remain gaps. Treadmill comparisons retain speed and grade context and avoid a global intensity score. Machine levels and virtual distance require comparable equipment. No physiology, calorie, GPS or calculated-distance measurements are invented.
+
+The isolated rotation fixture is never installed into user data. Existing program exercises, weights and progression rules remain authoritative.
 
 ## Build an APK
 
@@ -36,7 +46,9 @@ Android components: platform 36, build tools 36.0.0, NDK 27.1.12297006. Gradle u
 
 The initial APK uses the public React Native template development signing key, downloaded from a pinned official template revision and verified by SHA-256. Keystore files stay out of Git. This avoids CI signing secrets and keeps test updates compatible. It is intended for personal testing. A production distribution needs a private signing key configured in the ignored `android/devfit-keystore.properties`; changing keys requires backing up data before uninstall/reinstall. Upstream signing properties are not used.
 
-Version 0.3.0 uses versionCode 3 and the same package, storage keys and signer as 0.2.0. CI checks the signing certificate against the downloaded v0.2 APK's SHA-256 certificate fingerprint `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. Install the update over v0.2. No destructive migration is needed: phase laps, rest intent, setup dismissal and catch-up provenance are optional validated fields. Old JSON profiles remain valid.
+Version 0.4.0 uses versionCode 4 and the same package, storage keys and signer as 0.3.0. CI checks certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. Install over v0.3. All new fields are optional and validated. No destructive migration or storage-key change is needed. Old JSON profiles remain valid.
+
+`ISet.devfitCardio` contains schema version, activity kind, provenance, date precision, actual duration, optional measured fields and phases. Its `actualDurationSeconds` is authoritative. `Cardio_mirror` writes that duration to `completedSetTimer` for legacy rendering/CSV, never adds both. Structured multi-set cardio derives activity duration from those sets. Optional `IHistoryEntry.devfitCardioDetails` stores whole-activity machine measurements without another duration field. Finish capture and graphs use the combined activity. Active-work coverage is labeled, and average machine speed is suppressed when recovery timers are outside recorded duration. The retained timer editor synchronizes corrections and clears unsupported phase breakdowns. Legacy records without metadata continue to use recorded set duration. `cardioLaps` can carry confirmed speed/grade observations. Valid legacy phase events adapt without invented machine metrics. The work clock preserves its original `performedAt` across pause/resume. Explicit record credit is tracked by program, scheduled date, rotation day and intended program day. Sets remain atomic. Optional record credit and entry details join controlled fields. JSON backup and the existing MMKV shards include these fields. Watch filtering still excludes completed history.
 
 ## Personal behavior
 
@@ -62,7 +74,7 @@ npm run test:devfit:render
 
 The offline lifecycle test seeds a profile with programs, custom exercises, measurements, equipment and schedule metadata, starts immediately, pauses, persists/reopens, resumes, finishes and verifies real progression with no network calls. Domain tests cover serialized clock freeze/resume, rest intent and cues, equipment stacks/small steps/plates, anchored dates, catch-up isolation, numbered running labels and phase persistence. Native interaction/render tests cover compact/unfolded Today → Start, edited keypad reps, rapid current sets, pause inside cardio, rest controls, equipment setup navigation, unilateral transitions, automatic intervals and Schedule/catch-up. These use mocked native bridges and do not prove OS behavior.
 
-The v0.3 release passes TypeScript, scoped ESLint and view checks, 293 domain tests and 24 native interaction/render tests. The isolated web preview also compiles. A controllable browser was unavailable during this release, so fresh screenshot inspection is unverified.
+The v0.4 suites pass 317 domain tests and 28 native interaction/render tests. Coverage includes the real October calendar, late/mismatched records, explicit credit, historical save/edit/delete isolation, machine fields, live pause/phase timing, auto transitions, date-only grouping, DST gaps, duration edits and v0.3-format JSON restore. Native render tests drive the real save/edit/delete controls at 360 and 960 logical pixels. Native bridges are mocked. A controllable browser and physical device were unavailable, so screenshot and hardware behavior remain unverified.
 
 CI also compiles native Android, verifies APK identity/signature and checks that the JavaScript bundle is embedded. Native runtime behavior still needs testing on a device: offline onboarding, workout completion/progression, force-stop/reopen persistence, background timers and notification actions, Health Connect permission flows, import/export, and folded/unfolded layouts.
 

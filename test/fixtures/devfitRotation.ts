@@ -52,18 +52,25 @@ bikeStairs: Cycling / 1x1 600s|0s
   program.nextDay = 2;
   const schedule: IDevFitSchedule = {
     cycleDays: 14,
-    anchorDate: "2026-10-05",
+    anchorDate: "2026-10-07",
+    homeTimeZone: "America/Edmonton",
+    referenceSource: "confirmed",
+    personalRotation: true,
     days: [
       { day: 1, programDay: 1, context: "work" },
       { day: 2, context: "work" },
       { day: 3, programDay: 2, context: "off" },
       { day: 4, programDay: 3, context: "off" },
-      { day: 6, programDay: 4 },
+      { day: 5, programDay: 4, context: "off" },
+      { day: 6, programDay: 5, context: "work" },
       { day: 7, context: "work" },
-      { day: 8, programDay: 5, context: "work" },
-      { day: 10, programDay: 6, context: "off" },
+      { day: 8, programDay: 6, context: "off" },
+      { day: 9, programDay: 7, context: "off" },
+      { day: 10, programDay: 1, context: "work" },
       { day: 11, context: "work" },
-      { day: 12, programDay: 7, context: "off" },
+      { day: 12, programDay: 5, context: "work" },
+      { day: 13, programDay: 2, context: "off" },
+      { day: 14, programDay: 3, context: "off" },
     ],
   };
   return { program, schedule };

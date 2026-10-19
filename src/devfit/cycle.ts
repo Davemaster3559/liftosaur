@@ -4,12 +4,16 @@ import { History_getMax1RMSet, History_getNumberOfPersonalRecords, IPersonalReco
 import { Reps_avgUnilateralCompletedReps } from "../models/set";
 import { Weight_build, Weight_convertTo, Weight_getOneRepMax } from "../models/weight";
 import { WeekInsightsUtils_calculateSetResults } from "../utils/weekInsightsUtils";
+import { Session_exerciseKind } from "./presentation";
+import { Dates_add, Dates_key, Dates_timestamp, Dates_zone } from "./dates";
+import { Cardio_recordDate } from "./cardio";
 
 export interface ICycleRange {
   start: number;
   end: number;
   now: number;
   days: number;
+  zone?: string;
 }
 export interface ICycleTrend {
   key: string;
@@ -30,19 +34,25 @@ export function Cycle_dayKey(record: IHistoryRecord): number {
 
 export function Cycle_range(settings: ISettings, now: number = Date.now()): ICycleRange {
   const days = Cycle_setting(settings.devfitCycleDays, 14);
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - days + 1);
-  const end = new Date(now);
-  end.setHours(0, 0, 0, 0);
-  end.setDate(end.getDate() + 1);
-  return { start: start.getTime(), end: end.getTime(), now, days };
+  const zone = Object.values(settings.devfitSchedules ?? {}).find((s) => s.homeTimeZone)?.homeTimeZone ?? Dates_zone();
+  const today = Dates_key(now, zone);
+  return {
+    start: Dates_timestamp(Dates_add(today, 1 - days), zone, "00:00"),
+    end: Dates_timestamp(Dates_add(today, 1), zone, "00:00"),
+    now,
+    days,
+    zone,
+  };
 }
 
 export function Cycle_records(history: IHistoryRecord[], range: ICycleRange): IHistoryRecord[] {
   return history.filter(
     (r) =>
-      r.vtype === "history_record" && r.startTime >= range.start && r.startTime < range.end && r.startTime <= range.now
+      r.vtype === "history_record" &&
+      (r.source === "devfit_manual"
+        ? Cardio_recordDate(r, range.zone) >= Dates_key(range.start, range.zone) &&
+          Cardio_recordDate(r, range.zone) <= Dates_key(range.now, range.zone)
+        : r.startTime >= range.start && r.startTime < range.end && r.startTime <= range.now)
   );
 }
 
@@ -50,7 +60,9 @@ export function Cycle_bodyweightChange(stats: IStats, range: ICycleRange, settin
   const values = (stats.weight.weight ?? [])
     .filter((s) => s.timestamp >= range.start && s.timestamp < range.end && s.timestamp <= range.now)
     .sort((a, b) => a.timestamp - b.timestamp);
-  if (values.length < 2) return undefined;
+  if (values.length < 2) {
+    return undefined;
+  }
   return Weight_build(
     Weight_convertTo(values[values.length - 1].value, settings.units).value -
       Weight_convertTo(values[0].value, settings.units).value,
@@ -75,20 +87,26 @@ export function Cycle_trends(history: IHistoryRecord[], range: ICycleRange, sett
     }
     for (const [key, sets] of byExercise) {
       const best = History_getMax1RMSet(sets);
-      if (!best || !best.completedWeight || !best.completedReps) continue;
+      if (!best || !best.completedWeight || !best.completedReps) {
+        continue;
+      }
       const estimate = Weight_getOneRepMax(
         best.completedWeight,
         Reps_avgUnilateralCompletedReps(best) ?? 0,
         best.completedRpe ?? best.rpe ?? 10
       );
       const value = Weight_convertTo(estimate, settings.units).value;
-      if (value <= 0) continue;
+      if (value <= 0) {
+        continue;
+      }
       sessions.set(key, [...(sessions.get(key) ?? []).slice(-1), { time: record.startTime, value }]);
     }
   }
   const trends: ICycleTrend[] = [];
   for (const [key, values] of sessions) {
-    if (values.length < 2 || values[1].time < range.start) continue;
+    if (values.length < 2 || values[1].time < range.start) {
+      continue;
+    }
     const change = (values[1].value / values[0].value - 1) * 100;
     const exercise = Exercise_get(exerciseTypes.get(key)!, settings.exercises);
     trends.push({
@@ -107,14 +125,26 @@ export function Cycle_summary(
   stats: IStats,
   prs: IPersonalRecords,
   now: number = Date.now()
-) {
+): {
+  range: ICycleRange;
+  records: IHistoryRecord[];
+  target: number;
+  sets: ReturnType<typeof WeekInsightsUtils_calculateSetResults>;
+  prs: number;
+  bodyweightChange?: IWeight;
+  trends: ICycleTrend[];
+} {
   const range = Cycle_range(settings, now);
   const records = Cycle_records(history, range);
+  const strength = records.map((r) => ({
+    ...r,
+    entries: r.entries.filter((e) => Session_exerciseKind(undefined, e, settings) === "strength"),
+  }));
   return {
     range,
     records,
     target: Cycle_setting(settings.devfitCycleTarget, 4),
-    sets: WeekInsightsUtils_calculateSetResults(records, settings, Cycle_dayKey),
+    sets: WeekInsightsUtils_calculateSetResults(strength, settings, Cycle_dayKey),
     prs: History_getNumberOfPersonalRecords(records, prs),
     bodyweightChange: Cycle_bodyweightChange(stats, range, settings),
     trends: Cycle_trends(history, range, settings),

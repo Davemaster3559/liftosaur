@@ -29,6 +29,7 @@ import { DevFitWorkoutClock } from "./workoutClock";
 import { DevFitRestPanel } from "./restPanel";
 import { DevFitAction, DevFitBar, DevFitColumns, DevFitSection, DevFitSurface, DevFitTag, DevFitTitle } from "./ui";
 import { DevFitPage } from "./page";
+import { DevFitRecordedCardio } from "./recordedCardio";
 
 const renderActiveSet = (props: Parameters<typeof DevFitActiveSet>[0]): JSX.Element => <DevFitActiveSet {...props} />;
 
@@ -260,6 +261,13 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
               </DevFitSurface>
             )}
             <DevFitSection title="Set timeline" detail="Tap to edit a set">
+              <DevFitRecordedCardio
+                progress={progress}
+                entryIndex={entryIndex}
+                settings={settings}
+                history={props.history}
+                dispatch={props.dispatch}
+              />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {allSets.map((s) => (
                   <Pressable

@@ -8,7 +8,9 @@ import { History_getPersonalRecords } from "../models/history";
 import { ExerciseImage } from "../components/exerciseImage";
 import { useNow } from "../utils/useNow";
 import { Cycle_summary } from "./cycle";
-import { Schedule_overview } from "./schedule";
+import { Schedule_overview, Schedule_suggestion, Schedule_anchor } from "./schedule";
+import { updateSettings } from "../models/state";
+import { lb } from "lens-shmens";
 import { Session_completion, Session_day, Session_displayName, SESSION_LABELS } from "./presentation";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import {
@@ -22,6 +24,8 @@ import {
   DevFitTitle,
 } from "./ui";
 import { DevFitPage } from "./page";
+import { DevFitCardioLog } from "./cardioLog";
+import { Dates_key, Dates_label } from "./dates";
 
 export function DevFitToday(props: {
   program: IProgram;
@@ -60,7 +64,11 @@ export function DevFitToday(props: {
     () =>
       Cycle_summary(
         props.history,
-        { ...props.settings, devfitCycleDays: props.settings.devfitCycleDays ?? plan.config.cycleDays },
+        {
+          ...props.settings,
+          devfitCycleDays: props.settings.devfitCycleDays ?? plan.config.cycleDays,
+          devfitSchedules: { [props.program.id]: plan.config },
+        },
         props.stats,
         History_getPersonalRecords(props.history),
         now
@@ -68,12 +76,13 @@ export function DevFitToday(props: {
     [props.history, props.settings, props.stats, plan.config.cycleDays, now]
   );
   const completion = props.progress && Session_completion(props.progress.entries);
+  const suggestion = plan.setupNeeded ? Schedule_suggestion(evaluated, props.settings, props.history, now) : undefined;
   return (
     <DevFitPage testID="devfit-today">
       <DevFitTitle
         eyebrow="DevFit / your training"
         title="Today"
-        subtitle={new Date(now).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+        subtitle={Dates_label(Dates_key(now, plan.config.homeTimeZone))}
       />
       {plan.today && (
         <View testID="devfit-rotation-day-badge" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -87,12 +96,37 @@ export function DevFitToday(props: {
             Keep your rotation in step with your calendar.
           </Text>
           <Text style={{ color: c.muted }}>
-            In Schedule, tap your real current rotation day and choose Make this day today. Missed workouts will leave
-            those dates in place.
+            {suggestion?.explanation} Confidence: {suggestion?.confidence}.
           </Text>
+          {props.dispatch && suggestion && (
+            <DevFitAction
+              label={`Confirm Day ${suggestion.day} is today`}
+              onPress={() =>
+                updateSettings(
+                  props.dispatch!,
+                  lb<ISettings>()
+                    .p("devfitSchedules")
+                    .recordModify((s) => ({
+                      ...s,
+                      [props.program.id]: Schedule_anchor(plan.config, suggestion.day, now),
+                    })),
+                  "Confirm home rotation"
+                )
+              }
+            />
+          )}
           <DevFitAction label="Set up my rotation" onPress={props.onSchedule} />
           {props.onDismissSetup && <DevFitAction label="Later" secondary onPress={props.onDismissSetup} />}
         </DevFitSurface>
+      )}
+      {props.dispatch && (
+        <DevFitCardioLog
+          compact
+          history={props.history}
+          settings={props.settings}
+          program={props.program}
+          dispatch={props.dispatch}
+        />
       )}
       <DevFitColumns
         primary={

@@ -187,6 +187,8 @@
     "decision-in-view:useEffect#1": "predates the rule"
   },
   "src/components/setTimerBanner.tsx": {
+    "decision-in-view:anonymous#1": "dispatch adapter: CardioActions_phase owns native clock validation; the playground applies pure Cardio_phaseSetting",
+    "decision-in-view:anonymous#2": "dispatch adapter: CardioActions_phase owns native clock validation; the playground applies pure Session_switchPhase",
     "long-view": "one timed-set modal: legacy strength body and shared effect/controller wiring; cardio rendering is delegated to DevFitCardioTimer",
     "decision-in-view:recordSetTimer": "dispatch adapter: Session_timedRecordingSet owns recording values; this applies its result and routes playground versus native actions"
   },

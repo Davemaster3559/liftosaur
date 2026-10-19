@@ -375,23 +375,23 @@ describe("DevFit v0.3 gym flow", () => {
     expect(Weight_step(Weight_build(32.5, "kg"), 1, settings, type).value).to.equal(32.5);
   });
 
-  it("leaves new calendars unanchored and uses the existing anchor to select today's real program day", () => {
+  it("uses the confirmed personal reference to select today's real program day", () => {
     const { program, schedule } = DevFitRotation_fixture();
     const settings = Settings_build();
     const evaluated = Program_evaluate(program, settings);
-    expect(Schedule_default(evaluated).anchorDate).to.equal(undefined);
-    expect(Schedule_overview(evaluated, settings, [], Date.now()).setupNeeded).to.equal(true);
+    expect(Schedule_default(evaluated).anchorDate).to.equal("2026-10-07");
+    expect(Schedule_overview(evaluated, settings, [], Date.now()).setupNeeded).to.equal(false);
     const now = new Date(2026, 9, 14, 12).getTime();
     settings.devfitSchedules = { [program.id]: schedule };
     const overview = Schedule_overview(evaluated, settings, [], now);
-    expect(overview.today?.day).to.equal(10);
+    expect(overview.today?.day).to.equal(8);
     expect(overview.selectedDay).to.equal(6);
     expect(overview.mismatch).to.equal(true);
     expect(overview.canCatchUp).to.equal(true);
     expect(overview.missed.map((m) => m.area)).to.include.members(["upper", "lower", "cardio"]);
-    expect(Schedule_overview(evaluated, settings, [], now).today?.day).to.equal(10);
+    expect(Schedule_overview(evaluated, settings, [], now).today?.day).to.equal(8);
     for (const day of [2, 7, 11]) {
-      const date = new Date(2026, 9, 4 + day, 12).getTime();
+      const date = new Date(2026, 9, 6 + day, 12).getTime();
       const recovery = Schedule_overview(evaluated, settings, [], date);
       expect(recovery.recovery).to.equal(true);
       expect(recovery.canCatchUp).to.equal(false);
@@ -413,7 +413,13 @@ describe("DevFit v0.3 gym flow", () => {
     late.startTime = new Date(2026, 9, 13, 12).getTime();
     late.entries[0].sets[0].isCompleted = true;
     const slots = Schedule_slots(evaluated, settings, [late], now);
-    expect(slots[2]).to.include({ completed: true, completedLate: true, missed: false });
+    expect(slots[2]).to.include({ completed: false, completedLate: false, missed: true });
+    late.devfitScheduleCredit = { programId: program.id, scheduledDate: "2026-10-09", rotationDay: 3, programDay: 2 };
+    expect(Schedule_slots(evaluated, settings, [late], now)[2]).to.include({
+      completed: true,
+      completedLate: true,
+      missed: false,
+    });
     expect(Schedule_missedSessions(evaluated, settings, [late], now).some((m) => m.programDay === 2)).to.equal(false);
     expect(Schedule_overview(evaluated, settings, [late], now).canCatchUp).to.equal(false);
     expect(Schedule_slots(evaluated, settings, [late], now + 14 * 86400000)[2].completed).to.equal(false);

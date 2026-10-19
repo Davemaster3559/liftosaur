@@ -61,7 +61,7 @@ jobs:
           APK=android/app/build/outputs/apk/release/app-release.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/devfit-signature.txt
           grep -F 'Signer #1 certificate SHA-256 digest: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c' /tmp/devfit-signature.txt
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep "package: name='com.devfit.app' versionCode='3' versionName='0.3.0'"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep "package: name='com.devfit.app' versionCode='4' versionName='0.4.0'"
           unzip -l "$APK" | grep 'assets/index.android.bundle'
           mkdir -p dist/devfit
           cp "$APK" "dist/devfit/DevFit-android-${GITHUB_SHA:0:8}.apk"

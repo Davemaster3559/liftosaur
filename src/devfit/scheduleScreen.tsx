@@ -14,6 +14,10 @@ import { Schedule_assign, Schedule_anchor, Schedule_get, Schedule_slots } from "
 import { SESSION_LABELS, Session_displayName } from "./presentation";
 import { DevFitAction, DevFitSection, DevFitSurface, DevFitTag, DevFitTitle, useDevFitLayout } from "./ui";
 import { DevFitPage } from "./page";
+import { DevFitCardioLog } from "./cardioLog";
+import { DevFitField } from "./cardioActivityForm";
+import { Dates_label, Dates_zone } from "./dates";
+import { CardioActions_credit } from "./cardioActions";
 
 export function DevFitSchedule(props: {
   program: IProgram;
@@ -27,6 +31,7 @@ export function DevFitSchedule(props: {
   const { wide } = useDevFitLayout();
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<number>();
+  const [zone, setZone] = useState("");
   const evaluated = useMemo(() => Program_evaluate(props.program, props.settings), [props.program, props.settings]);
   const config = Schedule_get(evaluated, props.settings);
   const slots = useMemo(
@@ -58,6 +63,16 @@ export function DevFitSchedule(props: {
         />
         <DevFitAction label="Choose program" secondary onPress={() => navigateToModal("changeNextDayModal")} />
       </View>
+      <DevFitCardioLog
+        compact
+        history={props.history}
+        settings={props.settings}
+        dispatch={props.dispatch}
+        program={props.program}
+      />
+      <Text style={{ color: c.muted }}>
+        Home calendar: {config.homeTimeZone}. Training dates follow this time zone when you travel.
+      </Text>
       {!config.anchorDate && (
         <DevFitSurface>
           <Text className="font-semibold" style={{ color: c.ink }}>
@@ -71,6 +86,16 @@ export function DevFitSchedule(props: {
       )}
       {editing && (
         <View style={{ gap: 12 }}>
+          <DevFitField label="Home rotation time zone" value={zone || config.homeTimeZone || ""} onChange={setZone} />
+          <DevFitAction
+            label="Save home time zone"
+            secondary
+            onPress={() => {
+              if (zone && Dates_zone(zone) === zone) {
+                save({ ...config, homeTimeZone: zone });
+              }
+            }}
+          />
           <Text className="text-sm" style={{ color: c.muted }}>
             Tap a day to assign a session or recovery and mark work / off context. This changes the calendar only.
           </Text>
@@ -128,9 +153,15 @@ export function DevFitSchedule(props: {
                     {slot.session.count > 4 ? ` · +${slot.session.count - 4} more` : ""}
                   </Text>
                 )}
-                {slot.date && (
+                {slot.dateKey && (
                   <Text className="text-xs" style={{ color: c.muted }}>
-                    {slot.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                    {Dates_label(slot.dateKey)}
+                  </Text>
+                )}
+                {!!slot.performed.length && (
+                  <Text style={{ color: c.ink }}>
+                    Performed: {slot.performed.map((r) => r.dayName).join(" · ")}
+                    {slot.mismatched.length ? " · different / extra session" : ""}
                   </Text>
                 )}
               </DevFitSurface>
@@ -164,6 +195,30 @@ export function DevFitSchedule(props: {
                 title={`Day ${selected ?? ""}`}
                 subtitle={selectedSlot?.session?.name ?? "Recovery / steps"}
               />
+              {selectedSlot?.dateKey &&
+                selectedSlot.programDay != null &&
+                selectedSlot.mismatched.map((record) => (
+                  <DevFitSurface key={record.id}>
+                    <Text style={{ color: c.ink }}>
+                      Scheduled: {selectedSlot.session?.name}. Performed: {record.dayName}. Keep both facts, or
+                      explicitly count this activity as a substitute.
+                    </Text>
+                    <DevFitAction
+                      secondary
+                      label={`Credit ${record.dayName} to this slot`}
+                      onPress={() => {
+                        props.dispatch(
+                          CardioActions_credit(record.id, {
+                            programId: props.program.id,
+                            scheduledDate: selectedSlot.dateKey!,
+                            rotationDay: selectedSlot.day,
+                            programDay: selectedSlot.programDay!,
+                          })
+                        );
+                      }}
+                    />
+                  </DevFitSurface>
+                ))}
               <DevFitAction
                 label="Make this day today"
                 secondary

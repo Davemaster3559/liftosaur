@@ -14,6 +14,8 @@ import {
   Session_exerciseKind,
 } from "./presentation";
 import { DevFitAction, DevFitBar, DevFitSurface, DevFitTag } from "./ui";
+import { DevFitPhaseControls } from "./phaseControls";
+import { ICardioPhaseSettings } from "./cardioSchema";
 
 export function DevFitCardioTimer(props: {
   entry: IHistoryEntry;
@@ -33,6 +35,8 @@ export function DevFitCardioTimer(props: {
   onClose: () => void;
   onResume?: () => void;
   onSwitchPhase?: () => void;
+  onPhaseSettings?: (value: ICardioPhaseSettings) => void;
+  onBeginPhase?: (phase: "walk" | "jog") => void;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
   const scale = useRemScale();
@@ -42,10 +46,9 @@ export function DevFitCardioTimer(props: {
   const coaching = Session_cardioCoaching(props.exercise, props.entry, props.settings);
   const set = props.entry.sets[props.setIndex];
   const phase = Session_phase(set, props.elapsedSeconds);
+  const phaseUnknown = props.entry.sets.length > 1 && !set.cardioLaps?.length;
   const showPhase =
-    props.entry.sets.length === 1 &&
-    !set.isUnilateral &&
-    Session_exerciseKind(props.exercise, props.entry, props.settings) === "running";
+    !set.isUnilateral && Session_exerciseKind(props.exercise, props.entry, props.settings) === "running";
   return (
     <View testID="devfit-cardio-timer" style={{ padding: 24, gap: 18, backgroundColor: c.canvas, borderRadius: 20 }}>
       <DevFitTag
@@ -75,7 +78,9 @@ export function DevFitCardioTimer(props: {
         )}
         {!ready && showPhase && (
           <Text testID="devfit-cardio-phase" style={{ color: c.ink }}>
-            {phase.phase === "walk" ? "WALK" : "JOG"} · {Session_minutes(phase.seconds)} this phase
+            {phaseUnknown
+              ? "Walk / jog phase not recorded"
+              : `${phase.phase === "walk" ? "WALK" : "JOG"} · ${Session_minutes(phase.seconds)} this phase`}
           </Text>
         )}
       </View>
@@ -86,7 +91,7 @@ export function DevFitCardioTimer(props: {
         <DevFitAction label="Start now" testID="set-timer-start-now" onPress={props.onStart} />
       ) : (
         <>
-          {(!props.completed || props.nextSide) && (
+          {(!props.completed || props.nextSide || set.devfitCardio) && (
             <DevFitAction
               label={props.nextSide ? "Next side →" : `Stop & record · ${Session_minutes(props.elapsedSeconds)}`}
               testID="set-timer-stop-record"
@@ -101,12 +106,29 @@ export function DevFitCardioTimer(props: {
               onPress={props.onKeepTiming}
             />
           )}
-          {!props.completed && showPhase && props.onSwitchPhase && (
+          {showPhase && phaseUnknown && props.onBeginPhase && (
+            <View style={{ gap: 8 }}>
+              <DevFitAction label="This work segment is walk" secondary onPress={() => props.onBeginPhase!("walk")} />
+              <DevFitAction label="This work segment is jog" onPress={() => props.onBeginPhase!("jog")} />
+            </View>
+          )}
+          {showPhase && !phaseUnknown && props.onSwitchPhase && (
             <DevFitAction
               label={phase.phase === "walk" ? "Switch to jog" : "Switch to walk"}
               testID="devfit-cardio-switch-phase"
-              secondary
               onPress={props.onSwitchPhase}
+            />
+          )}
+          {showPhase && !phaseUnknown && props.onPhaseSettings && (
+            <DevFitPhaseControls
+              key={phase.phase}
+              phase={phase.phase}
+              suggestion={props.settings.devfitCardioSuggestions?.[phase.phase]}
+              actual={set.cardioLaps
+                ?.slice()
+                .reverse()
+                .find((l) => l.phase === phase.phase && (l.speed || l.inclinePercent != null))}
+              onConfirm={props.onPhaseSettings}
             />
           )}
         </>

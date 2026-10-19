@@ -16,6 +16,7 @@ import { DevFitToday } from "../../devfit/today";
 import { DevFitAction } from "../../devfit/ui";
 import { Thunk_pushScreen, Thunk_startProgramDay, Thunk_startCatchUp } from "../../ducks/thunks";
 import { navigateToModal } from "../navigationService";
+import { DevFitCardioLog } from "../../devfit/cardioLog";
 
 export function NavScreenMain(): JSX.Element {
   const state = useTrackedState();
@@ -35,6 +36,21 @@ export function NavScreenMain(): JSX.Element {
     state.storage.currentProgramId != null ? Program_getProgram(state, state.storage.currentProgramId) : undefined
   );
   const insets = useSafeAreaInsets();
+  useEffect(() => {
+    if (!currentProgram) {
+      return;
+    }
+    const resolved = Schedule_get(Program_evaluate(currentProgram, state.storage.settings), state.storage.settings);
+    if (JSON.stringify(resolved) !== JSON.stringify(state.storage.settings.devfitSchedules?.[currentProgram.id])) {
+      updateSettings(
+        dispatch,
+        lb<ISettings>()
+          .p("devfitSchedules")
+          .recordModify((s) => ({ ...s, [currentProgram.id]: resolved })),
+        "Remember home rotation"
+      );
+    }
+  }, [currentProgram, state.storage.settings.devfitSchedules, dispatch]);
 
   if (currentProgram == null) {
     return (
@@ -89,6 +105,12 @@ export function NavScreenMain(): JSX.Element {
       ) : (
         <>
           <DevFitAction label="Back to Today" secondary onPress={() => setHistoryVisible(false)} />
+          <DevFitCardioLog
+            history={untrack(state.storage.history)}
+            settings={untrack(state.storage.settings)}
+            dispatch={dispatch}
+            program={currentProgram}
+          />
           <ProgramHistoryView
             progress={ongoingProgress}
             navCommon={navCommon}

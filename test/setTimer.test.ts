@@ -388,6 +388,7 @@ describe("Get ready countdown", () => {
       setIndex: 0,
       ...phase(base, 0, 0),
       startedAt: 12345,
+      performedAt: 12345,
       nonce: 7,
     });
   });
