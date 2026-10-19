@@ -5,12 +5,12 @@ import { Text } from "../components/primitives/text";
 import { IDevFitSchedule, IHistoryRecord, IProgram, ISettings } from "../types";
 import { IDispatch } from "../ducks/types";
 import { Program_evaluate, Program_getListOfDays } from "../models/program";
-import { EditProgram_setNextDay } from "../models/editProgram";
 import { updateSettings } from "../models/state";
 import { Thunk_pushToEditProgram, Thunk_startProgramDay } from "../ducks/thunks";
 import { navigateToModal } from "../navigation/navigationService";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
-import { Schedule_assign, Schedule_dateKey, Schedule_get, Schedule_slots } from "./schedule";
+import { useNow } from "../utils/useNow";
+import { Schedule_assign, Schedule_anchor, Schedule_get, Schedule_slots } from "./schedule";
 import { SESSION_LABELS, Session_displayName } from "./presentation";
 import { DevFitAction, DevFitSection, DevFitSurface, DevFitTag, DevFitTitle, useDevFitLayout } from "./ui";
 import { DevFitPage } from "./page";
@@ -23,14 +23,15 @@ export function DevFitSchedule(props: {
   isOngoing: boolean;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
+  const now = useNow();
   const { wide } = useDevFitLayout();
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<number>();
   const evaluated = useMemo(() => Program_evaluate(props.program, props.settings), [props.program, props.settings]);
   const config = Schedule_get(evaluated, props.settings);
   const slots = useMemo(
-    () => Schedule_slots(evaluated, props.settings, props.history, Date.now()),
-    [evaluated, props.settings, props.history]
+    () => Schedule_slots(evaluated, props.settings, props.history, now),
+    [evaluated, props.settings, props.history, now]
   );
   function save(value: IDevFitSchedule): void {
     updateSettings(
@@ -100,19 +101,23 @@ export function DevFitSchedule(props: {
                   </Text>
                   {slot.isToday && <DevFitTag label="Today" />}
                   {slot.completed ? (
-                    <DevFitTag label="✓ Completed" success />
+                    <DevFitTag label={slot.completedLate ? "✓ Completed later" : "✓ Completed"} success />
+                  ) : slot.missed ? (
+                    <DevFitTag label="Not logged" />
                   ) : (
-                    slot.isNext && <DevFitTag label="Next session" success />
+                    slot.isNext && <DevFitTag label="Program pointer" />
                   )}
                   {slot.context && <DevFitTag label={slot.context === "work" ? "Work" : "Off"} />}
                 </View>
                 <Text className="text-xl font-bold" style={{ color: c.ink }}>
-                  {slot.session?.name ?? "Recovery / steps"}
+                  {slot.session?.name ?? (slot.isWorkSteps ? "Work Steps" : "Recovery / steps")}
                 </Text>
                 <Text className="text-sm" style={{ color: c.muted }}>
                   {slot.session
                     ? `${SESSION_LABELS[slot.session.kind]} · ${slot.session.duration} · ${slot.session.count} ${slot.session.count === 1 ? "exercise" : "exercises"}`
-                    : "Rest, easy movement and work-day steps"}
+                    : slot.isWorkSteps
+                      ? "Work-shift active recovery · steps & movement"
+                      : "Rest, easy movement and work-day steps"}
                 </Text>
                 {slot.session && (
                   <Text className="text-xs" style={{ color: c.muted }}>
@@ -163,9 +168,7 @@ export function DevFitSchedule(props: {
                 label="Make this day today"
                 secondary
                 onPress={() => {
-                  const date = new Date();
-                  date.setDate(date.getDate() - (selected! - 1));
-                  save({ ...config, anchorDate: Schedule_dateKey(date.getTime()) });
+                  save(Schedule_anchor(config, selected!, now));
                   setSelected(undefined);
                 }}
               />
@@ -207,7 +210,7 @@ export function DevFitSchedule(props: {
                     />
                   ))}
                 </>
-              ) : selectedSlot?.programDay != null ? (
+              ) : selectedSlot?.programDay != null && selectedSlot.session?.kind !== "recovery" ? (
                 <DevFitAction
                   label={
                     props.isOngoing
@@ -215,10 +218,7 @@ export function DevFitSchedule(props: {
                       : `Train ${selectedSlot.session?.name ?? "this session"}`
                   }
                   onPress={() => {
-                    if (!props.isOngoing) {
-                      EditProgram_setNextDay(props.dispatch, props.program.id, selectedSlot.programDay!);
-                    }
-                    props.dispatch(Thunk_startProgramDay());
+                    props.dispatch(Thunk_startProgramDay(undefined, selectedSlot.programDay));
                     setSelected(undefined);
                   }}
                 />

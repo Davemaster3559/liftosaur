@@ -251,6 +251,26 @@ export function Weight_getOneRepMax(weight: IWeight, reps: number, rpe?: number)
   }
 }
 
+export function Weight_step(
+  weight: IWeight,
+  direction: -1 | 1,
+  settings: ISettings,
+  exerciseType?: IExerciseType
+): IWeight {
+  const unit = Equipment_getEquipmentDataForExerciseType(settings, exerciseType)?.unit ?? weight.unit;
+  const current = Weight_convertTo(weight, unit);
+  const rounded = Weight_round(current, settings, unit, exerciseType);
+  if ((rounded.value - current.value) * direction > 0.000001) {
+    return rounded;
+  }
+  const stepped =
+    direction > 0
+      ? Weight_increment(current, settings, exerciseType)
+      : Weight_decrement(current, settings, exerciseType);
+  const result = Weight_round(stepped, settings, unit, exerciseType);
+  return (result.value - current.value) * direction > 0.000001 ? result : current;
+}
+
 export function Weight_getNRepMax(oneRepMax: IWeight, reps: number): IWeight {
   if (reps === 0) {
     return Weight_build(0, oneRepMax.unit);

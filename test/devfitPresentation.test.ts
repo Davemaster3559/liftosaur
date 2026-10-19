@@ -60,6 +60,7 @@ describe("DevFit schedule and workout presentation", () => {
   it("matches completion to this cycle's date, rather than weekday or any historical session", () => {
     const record = Program_nextHistoryRecord(program, settings, Stats_getEmpty());
     record.vtype = "history_record";
+    record.entries[0].sets[0].isCompleted = true;
     record.startTime = now - 14 * 86400000;
     expect(Schedule_slots(evaluated, settings, [record], now)[2].completed).to.equal(false);
     record.startTime = now;

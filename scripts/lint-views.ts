@@ -43,8 +43,8 @@ function listViews(): string[] {
 }
 
 function isViewFile(file: string): boolean {
-  const rel = path.relative(ROOT, file);
-  return rel.endsWith(".tsx") && !rel.endsWith(".test.tsx") && VIEW_DIRS.some((d) => rel.startsWith(d + path.sep));
+  const rel = path.relative(ROOT, file).replace(/\\/g, "/");
+  return rel.endsWith(".tsx") && !rel.endsWith(".test.tsx") && VIEW_DIRS.some((d) => rel.startsWith(d + "/"));
 }
 
 function containsJsx(node: ts.Node): boolean {
@@ -131,7 +131,7 @@ function isComponentOrHook(node: ts.Node): node is ts.FunctionLikeDeclaration {
 }
 
 function lintFile(file: string): IFinding[] {
-  const rel = path.relative(ROOT, file);
+  const rel = path.relative(ROOT, file).replace(/\\/g, "/");
   const text = fs.readFileSync(file, "utf8");
   const findings: IFinding[] = [];
   const lineCount = text.split("\n").length;
@@ -203,7 +203,7 @@ function main(): void {
   }
   if (!quiet) {
     for (const file of files) {
-      const rel = path.relative(ROOT, file);
+      const rel = path.relative(ROOT, file).replace(/\\/g, "/");
       const seen = new Set(findings.filter((f) => f.file === rel).map((f) => f.key));
       for (const key of Object.keys(baseline[rel] ?? {})) {
         if (!seen.has(key)) {

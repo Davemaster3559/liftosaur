@@ -1,16 +1,20 @@
 import { JSX, useState, useEffect } from "react";
 import { View } from "react-native";
+import { lb } from "lens-shmens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute } from "@react-navigation/native";
 import { useTrackedState, useTrackedDispatch, untrack } from "../TrackedStateContext";
 import { buildNavCommon } from "../utils";
 import { ProgramHistoryView } from "../../components/programHistory";
 import { ChooseProgramView } from "../../components/chooseProgram";
-import { Program_getProgram } from "../../models/program";
+import { Program_getProgram, Program_evaluate } from "../../models/program";
+import { updateSettings } from "../../models/state";
+import { ISettings } from "../../types";
+import { Schedule_get } from "../../devfit/schedule";
 import { useScreenPerf } from "../../utils/useScreenPerf";
 import { DevFitToday } from "../../devfit/today";
 import { DevFitAction } from "../../devfit/ui";
-import { Thunk_pushScreen, Thunk_startProgramDay } from "../../ducks/thunks";
+import { Thunk_pushScreen, Thunk_startProgramDay, Thunk_startCatchUp } from "../../ducks/thunks";
 import { navigateToModal } from "../navigationService";
 
 export function NavScreenMain(): JSX.Element {
@@ -22,7 +26,9 @@ export function NavScreenMain(): JSX.Element {
   const navCommon = untrack(buildNavCommon(state));
   const route = useRoute<{ key: string; name: "main"; params?: { historyRecordId?: number } }>();
   useEffect(() => {
-    if (route.params?.historyRecordId != null) setHistoryVisible(true);
+    if (route.params?.historyRecordId != null) {
+      setHistoryVisible(true);
+    }
   }, [route.params?.historyRecordId]);
   const ongoingProgress = untrack(state.storage.progress?.[0]);
   const currentProgram = untrack(
@@ -57,7 +63,24 @@ export function NavScreenMain(): JSX.Element {
           history={untrack(state.storage.history)}
           stats={untrack(state.storage.stats)}
           progress={ongoingProgress}
-          onStart={() => dispatch(Thunk_startProgramDay())}
+          dispatch={dispatch}
+          onStart={(day) => dispatch(Thunk_startProgramDay(undefined, day))}
+          onCatchUp={(includeCardio) => dispatch(Thunk_startCatchUp(includeCardio))}
+          onDismissSetup={() =>
+            updateSettings(
+              dispatch,
+              lb<ISettings>()
+                .p("devfitSchedules")
+                .recordModify((s) => ({
+                  ...s,
+                  [currentProgram.id]: {
+                    ...Schedule_get(Program_evaluate(currentProgram, state.storage.settings), state.storage.settings),
+                    setupDismissed: true,
+                  },
+                })),
+              "Dismiss rotation setup"
+            )
+          }
           onSchedule={() => dispatch(Thunk_pushScreen("programs", undefined, { tab: "program" }))}
           onProgress={() => dispatch(Thunk_pushScreen("graphsList", undefined, { tab: "graphs" }))}
           onHistory={() => setHistoryVisible(true)}

@@ -43,6 +43,7 @@ import { WorkoutExerciseSetCompact } from "./workoutExerciseSetCompact";
 import { WorkoutExerciseSetExpanded } from "./workoutExerciseSetExpanded";
 import { SetCompleteHaptic_play } from "../utils/setCompleteHaptic";
 import ReactNativeHapticFeedback from "react-native-haptic-feedback";
+import { getNavigationService } from "../navigation/navUtils";
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: false, ignoreAndroidSystemSettings: false };
 
@@ -93,7 +94,9 @@ export function computeSetColumnWidths(remValue: number, isUnilateral: boolean, 
 }
 
 interface IWorkoutExerciseSet {
+  progressId?: number;
   renderBody?: (props: IWorkoutExerciseSetBodyProps) => ReactNode;
+  preserveRest?: boolean;
   exerciseType: IExerciseType;
   day: number;
   type: IProgressMode;
@@ -121,6 +124,7 @@ interface IWorkoutExerciseSet {
 
 export interface IWorkoutExerciseSetBodyProps {
   set: ISet;
+  preserveRest?: boolean;
   type: IProgressMode;
   setType: IWorkoutSetType;
   setIndex: number;
@@ -149,6 +153,7 @@ export interface IWorkoutExerciseSetBodyProps {
   onCompleteSet: () => void;
   onEditSetTimer?: () => void;
   onOpenRoundingInfo: () => void;
+  onWeightSetup: () => void;
   onToggleExpand?: () => void;
   onEditTarget?: () => void;
   onLongPressSet?: () => void;
@@ -289,6 +294,7 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
       mode: type,
       forceUpdateEntryIndex: type === "workout" && !set.isCompleted,
       isExternal: false,
+      preserveRest: props.preserveRest,
     });
   }, [
     dispatch,
@@ -305,6 +311,7 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     settings,
     refocus,
     onCompleteExpansion,
+    props.preserveRest,
   ]);
   const onEditSetTimer = useCallback(() => {
     trackClick("workout-set-timer-edit-open");
@@ -376,6 +383,7 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
 
   const body: IWorkoutExerciseSetBodyProps = {
     set,
+    preserveRest: props.preserveRest,
     type: props.type,
     setType,
     setIndex,
@@ -404,6 +412,15 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     onCompleteSet,
     onEditSetTimer: props.type === "workout" ? onEditSetTimer : undefined,
     onOpenRoundingInfo,
+    onWeightSetup: async () => {
+      updateProgress(
+        dispatch,
+        lb<IHistoryRecord>().pi("ui", {}).p("equipmentModal").record({ exerciseType }),
+        "Open weight setup"
+      );
+      const { navigateToModal } = await getNavigationService();
+      navigateToModal("equipmentModal", { context: "workout", progressId: props.progressId ?? 0 });
+    },
     onToggleExpand: onToggleExpandProp ? onToggleExpand : undefined,
     onEditTarget: hasEdit ? onEditTarget : undefined,
     onLongPressSet: hasEdit ? onLongPressSet : undefined,

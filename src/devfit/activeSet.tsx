@@ -7,7 +7,7 @@ import { InputWeight2 } from "../components/inputWeight2";
 import { WorkoutExerciseSetRpeTime } from "../components/workoutExerciseSetFields";
 import { PlatesBar } from "../components/platesBar";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
-import { Weight_convertTo, Weight_print } from "../models/weight";
+import { Weight_build, Weight_convertTo, Weight_step, Weight_print } from "../models/weight";
 import { Exercise_get } from "../models/exercise";
 import { DevFitAction, DevFitSurface, DevFitTag } from "./ui";
 import { Session_kind, Session_minutes } from "./presentation";
@@ -17,6 +17,25 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
   const { set, lastSet } = props;
   const timed = set.setTimer != null;
   const kind = Session_kind(Exercise_get(props.exerciseType, props.settings.exercises).name);
+  const weightUnit = (set.completedWeight ?? set.weight)?.unit ?? props.settings.units;
+  const currentWeightValue = (set.completedWeight ?? set.weight)?.value ?? 0;
+  const currentRepsValue = set.completedReps ?? set.reps ?? 0;
+  const currentLeftRepsValue = set.completedRepsLeft ?? set.reps ?? 0;
+
+  const stepWeight = (direction: -1 | 1): void => {
+    props.onBlurWeight(
+      Weight_step(Weight_build(currentWeightValue, weightUnit), direction, props.settings, props.exerciseType)
+    );
+  };
+
+  const stepReps = (delta: number): void => {
+    props.onBlurReps(Math.max(0, currentRepsValue + delta));
+  };
+
+  const stepLeftReps = (delta: number): void => {
+    props.onBlurLeftReps(Math.max(0, currentLeftRepsValue + delta));
+  };
+
   return (
     <DevFitSurface accent testID="devfit-active-set">
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
@@ -25,6 +44,7 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
           success={set.isCompleted}
         />
         {set.isAmrap && <DevFitTag label="AMRAP" />}
+        {timed && <DevFitTag label={set.isCompleted ? "Time recorded" : "Ready"} cardio />}
         {props.isUnilateral && <DevFitTag label="Left + right" />}
       </View>
       {timed ? (
@@ -50,11 +70,12 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
       ) : (
         <>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-            <View style={{ flex: 1, minWidth: 105, gap: 8 }}>
+            <View style={{ flex: 1, minWidth: 135, gap: 8 }}>
               <Text className="text-xs font-bold" style={{ color: c.muted }}>
-                WEIGHT · {set.weight?.unit ?? props.settings.units}
+                WEIGHT · {weightUnit}
               </Text>
               <InputWeight2
+                key={weightUnit}
                 name="set-weight"
                 size="lg"
                 fill
@@ -71,8 +92,21 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
                 min={-9999}
                 settings={props.settings}
               />
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <View style={{ flex: 1 }}>
+                  <DevFitAction
+                    label="− weight"
+                    secondary
+                    testID="devfit-weight-minus"
+                    onPress={() => stepWeight(-1)}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <DevFitAction label="+ weight" secondary testID="devfit-weight-plus" onPress={() => stepWeight(1)} />
+                </View>
+              </View>
             </View>
-            <View style={{ flex: 1, minWidth: 105, gap: 8 }}>
+            <View style={{ flex: 1, minWidth: 135, gap: 8 }}>
               <Text className="text-xs font-bold" style={{ color: c.muted }}>
                 {props.isUnilateral ? "RIGHT REPS" : "REPS"}
               </Text>
@@ -90,9 +124,17 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
                 max={9999}
                 step={1}
               />
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <View style={{ flex: 1 }}>
+                  <DevFitAction label="-1" secondary testID="devfit-reps-minus" onPress={() => stepReps(-1)} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <DevFitAction label="+1" secondary testID="devfit-reps-plus" onPress={() => stepReps(1)} />
+                </View>
+              </View>
             </View>
             {props.isUnilateral && (
-              <View style={{ flex: 1, minWidth: 105, gap: 8 }}>
+              <View style={{ flex: 1, minWidth: 135, gap: 8 }}>
                 <Text className="text-xs font-bold" style={{ color: c.muted }}>
                   LEFT REPS
                 </Text>
@@ -110,6 +152,19 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
                   max={9999}
                   step={1}
                 />
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  <View style={{ flex: 1 }}>
+                    <DevFitAction
+                      label="-1"
+                      secondary
+                      testID="devfit-left-reps-minus"
+                      onPress={() => stepLeftReps(-1)}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <DevFitAction label="+1" secondary testID="devfit-left-reps-plus" onPress={() => stepLeftReps(1)} />
+                  </View>
+                </View>
               </View>
             )}
           </View>
@@ -148,7 +203,15 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
         </>
       )}
       <DevFitAction
-        label={set.isCompleted ? "Undo completion" : timed ? "Start timer  ▶" : "Complete set  ✓"}
+        label={
+          set.isCompleted
+            ? "Undo completion"
+            : timed
+              ? "Start timer  ▶"
+              : props.preserveRest
+                ? "Log set · keep current rest"
+                : "Complete set  ✓"
+        }
         testID={timed && !set.isCompleted ? "start-set-timer" : "complete-set"}
         onPress={props.onCompleteSet}
       />
@@ -161,6 +224,7 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
         </View>
       )}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {!timed && <DevFitAction label="Weight setup" secondary onPress={props.onWeightSetup} />}
         {props.onEditTarget && <DevFitAction label="Edit target" secondary onPress={props.onEditTarget} />}
         {timed && props.onEditSetTimer && (
           <DevFitAction label="Timer options" secondary onPress={props.onEditSetTimer} />

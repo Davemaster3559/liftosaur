@@ -26,7 +26,13 @@ import { Progress_getCurrentProgress } from "../models/progress";
 import { useTrackClick } from "../utils/clickTracking";
 import { useRem, useRemScale } from "../utils/useRem";
 import { TEXT_SIZE_MAX } from "../models/settings";
-import { RestTimerProgress_at } from "../models/restTimerProgress";
+import {
+  IRestTimerNotice,
+  RestTimerProgress_at,
+  RestTimerProgress_context,
+  RestTimerProgress_notice,
+} from "../models/restTimerProgress";
+import { History_clockNow, History_pauseTime } from "../models/history";
 import { Tailwind_colors } from "../utils/tailwindConfig";
 import { RestTimerWidth_em } from "../models/restTimerWidth";
 
@@ -40,7 +46,8 @@ const RestTimerContentExiting = Platform.OS === "web" ? undefined : FadeOut.dura
 
 function useRestTimerProgressStyle(
   timerSince: number | undefined,
-  timer: number | undefined
+  timer: number | undefined,
+  pausedAt?: number
 ): ReturnType<typeof useAnimatedStyle> {
   const fraction = useSharedValue(0);
   // No cancelAnimation in cleanup: scheduleOnUI runs after the next .value write, so it stopped the new rest at 0.
@@ -48,12 +55,12 @@ function useRestTimerProgressStyle(
     if (timerSince == null || timer == null) {
       return;
     }
-    const progress = RestTimerProgress_at(timerSince, timer, Date.now());
+    const progress = RestTimerProgress_at(timerSince, timer, pausedAt ?? Date.now());
     fraction.value = progress.fraction;
-    if (progress.remainingMs > 0) {
+    if (progress.remainingMs > 0 && pausedAt == null) {
       fraction.value = withTiming(1, { duration: progress.remainingMs, easing: Easing.linear });
     }
-  }, [timerSince, timer, fraction]);
+  }, [timerSince, timer, fraction, pausedAt]);
   return useAnimatedStyle(() => ({ transform: [{ scaleX: fraction.value }] }));
 }
 
@@ -89,8 +96,7 @@ const shadowStyle = Platform.select({
 });
 
 export function RestTimer(props: IProps): JSX.Element | null {
-  const prevProps = useRef<IProps>(props);
-  const sentNotification = useRef<boolean>(false);
+  const notice = useRef<IRestTimerNotice>({});
   const [isExpanded, setIsExpanded] = useState(false);
   const trackClick = useTrackClick();
   const insets = useSafeAreaInsets();
@@ -129,38 +135,27 @@ export function RestTimer(props: IProps): JSX.Element | null {
   }, [hideTimer, targetBottom, animatedTargetBottom, animatedOpacity]);
   const { progress } = props;
   const { timer, timerSince } = progress;
-
-  useRestTimerTick(timerSince != null);
-  const progressStyle = useRestTimerProgressStyle(timerSince, timer);
+  const pausedAt = History_pauseTime(progress.intervals);
+  useRestTimerTick(timerSince != null && pausedAt == null);
+  const progressStyle = useRestTimerProgressStyle(timerSince, timer, pausedAt);
 
   useEffect(() => {
-    if (timerSince != null) {
-      const timeDifference = Date.now() - timerSince;
-      const timerMs = timer != null ? timer * 1000 : 0;
-      // Only play notification within 5s of completion; avoids repeat plays when syncing from another device past the threshold
-      const maxNotificationWindowMs = 5000;
-      if (
-        timer != null &&
-        timeDifference > timerMs &&
-        timeDifference <= timerMs + maxNotificationWindowMs &&
-        !sentNotification.current
-      ) {
-        if (!progress.ui?.nativeNotificationScheduled) {
-          props.dispatch(Thunk_playAudioNotification());
-        }
-        sentNotification.current = true;
-      } else if (timer != null && timeDifference > timerMs + maxNotificationWindowMs) {
-        sentNotification.current = true;
-      }
-      // Reset on any deadline change (start time OR duration), so extending the timer re-arms the chirp
-      const prevDeadline =
-        (prevProps.current.progress.timerSince ?? 0) + (prevProps.current.progress.timer ?? 0) * 1000;
-      const currDeadline = (props.progress.timerSince ?? 0) + (props.progress.timer ?? 0) * 1000;
-      if (prevDeadline !== currDeadline) {
-        sentNotification.current = false;
-      }
+    const time =
+      timerSince != null && timer != null
+        ? RestTimerProgress_at(timerSince, timer, History_clockNow(progress))
+        : undefined;
+    const result = RestTimerProgress_notice(
+      notice.current,
+      RestTimerProgress_context(progress, props.settings).key,
+      time,
+      timer,
+      pausedAt != null,
+      !!progress.ui?.nativeNotificationScheduled
+    );
+    notice.current = result.state;
+    if (result.notify) {
+      props.dispatch(Thunk_playAudioNotification());
     }
-    prevProps.current = props;
   });
 
   // The corner rest timer shows the rest for `auto` timed sets. Poll the model each tick so it advances
@@ -177,7 +172,7 @@ export function RestTimer(props: IProps): JSX.Element | null {
   }
   const pointerEventsMode = hideTimer ? "none" : "box-none";
 
-  const { elapsedMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, Date.now());
+  const { elapsedMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, History_clockNow(progress));
   const elapsedText = TimeUtils_formatMMSS(elapsedMs);
   const bgClass = isTimeOut ? "bg-background-darkred" : "bg-background-darkgray";
   const totalColorClass = isTimeOut ? "text-white" : "text-gray-300";
@@ -351,12 +346,13 @@ export function KeyboardRestTimer(): JSX.Element | null {
   const progress = Progress_getCurrentProgress(state);
   const timer = progress?.timer;
   const timerSince = progress?.timerSince;
-  useRestTimerTick(timerSince != null);
+  const pausedAt = History_pauseTime(progress?.intervals);
+  useRestTimerTick(timerSince != null && pausedAt == null);
 
   if (timer == null || timerSince == null) {
     return null;
   }
-  const { elapsedMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, Date.now());
+  const { elapsedMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, pausedAt ?? Date.now());
   return (
     <View pointerEvents="none" className="items-center absolute left-0 right-0 bottom-full mb-1">
       <Text

@@ -15,8 +15,7 @@ import { WorkoutHeartRate } from "./workoutHeartRate";
 import { Workout } from "./workout";
 import { WorkoutFinishButton } from "./workoutFinishButton";
 import { WorkoutMenu } from "./workoutMenu";
-import { Thunk_updateLiveActivity, Thunk_deleteProgress, Thunk_pauseWorkout } from "../ducks/thunks";
-import { Reps_findNextSetIndex } from "../models/set";
+import { Thunk_deleteProgress, Thunk_pauseWorkout } from "../ducks/thunks";
 import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { navigateToModal, getCurrentRouteName } from "../navigation/navigationService";
 import { Dialog_confirm } from "../utils/dialog";
@@ -183,10 +182,6 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
         isPlayground: false,
         hasSubscription: Subscriptions_hasSubscription(props.subscription),
       });
-      const currentEntryIndex = props.progress.currentEntryIndex || 0;
-      const currentEntry = props.progress.entries[currentEntryIndex];
-      const setIndex = currentEntry ? Reps_findNextSetIndex(currentEntry) : 0;
-      dispatch(Thunk_updateLiveActivity(currentEntryIndex, setIndex, props.progress.timer, props.progress.timerSince));
     } else {
       dispatch(Thunk_pauseWorkout());
     }
@@ -266,7 +261,7 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
   });
 
   if (progress != null) {
-    if (isCurrent && !advanced)
+    if (isCurrent && !advanced) {
       return (
         <DevFitWorkout
           progress={progress}
@@ -276,6 +271,7 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
           subscription={props.subscription}
           dispatch={props.dispatch}
           onAdvanced={() => setAdvanced(true)}
+          onPauseResume={onPauseResume}
           finish={
             <WorkoutFinishButton
               prominent
@@ -288,6 +284,7 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
           menu={renderHeaderMenu(() => {})}
         />
       );
+    }
     return (
       <View style={{ flex: 1 }}>
         {isCurrent && <DevFitAction label="Back to focused workout" secondary onPress={() => setAdvanced(false)} />}

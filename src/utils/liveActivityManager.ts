@@ -17,6 +17,7 @@ import {
 } from "./liveActivityState";
 import { INativeEffect } from "../models/nativeEffects";
 import { Capabilities_hasLocal } from "../devfit/capabilities";
+import { History_isActivelyPaused, History_workoutTime } from "../models/history";
 import { UrlUtils_build } from "./url";
 
 declare const __HOST__: string;
@@ -143,7 +144,7 @@ export function LiveActivityManager_updateLiveActivity(
   settings: ISettings,
   subscription?: ISubscription
 ): void {
-  if (!Capabilities_hasLocal("notifications")) {
+  if (!Capabilities_hasLocal("notifications") || History_isActivelyPaused(progress.intervals)) {
     return;
   }
   let liveActivityEntry = LiveActivityManager_getLiveActivityEntry(
@@ -199,7 +200,7 @@ export function LiveActivityManager_updateLiveActivity(
       ? progress.entries[progress.timerEntryIndex]?.sets[progress.timerSetIndex]
       : undefined;
   const attributes: ILiveActivityState = {
-    workoutStartTimestamp: progress.startTime,
+    workoutStartTimestamp: Date.now() - History_workoutTime(progress),
     historyEntryState: liveActivityEntry,
     setTimer: setTimerState,
     getReady: getReadyState,

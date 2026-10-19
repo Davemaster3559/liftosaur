@@ -22,6 +22,7 @@ import {
   Progress_showUpdateDate,
   Progress_changeDate,
   Progress_stopTimer,
+  Progress_resumeWorkout,
   Progress_getCurrentProgress,
   Progress_applyProgramDay,
   Progress_runInitialUpdateScripts,
@@ -73,7 +74,6 @@ import { UndoingFlag_set } from "../utils/undoingFlag";
 import { Diagnostics_getLastActions, Diagnostics_recordAction, Diagnostics_setLastState } from "../utils/diagnostics";
 import { Exercise_toKey } from "../models/exercise";
 import { INativeEffect, NativeEffects_withoutWatchWorkout } from "../models/nativeEffects";
-import { History_resumeWorkout } from "../models/history";
 import { IPlannerProgramExercise } from "../pages/planner/models/types";
 import { IByExercise } from "../pages/planner/plannerEvaluator";
 import { History_deleteRecords } from "../models/history";
@@ -108,7 +108,14 @@ declare let __HOST__: string;
 
 export async function getInitialState(
   client: Window["fetch"],
-  args: { url?: URL; rawStorage?: string; localStorage?: ILocalStorage; storage?: IStorage; deviceId: string; hasUnreadableStorage?: boolean }
+  args: {
+    url?: URL;
+    rawStorage?: string;
+    localStorage?: ILocalStorage;
+    storage?: IStorage;
+    deviceId: string;
+    hasUnreadableStorage?: boolean;
+  }
 ): Promise<IState> {
   const url =
     args?.url ||
@@ -259,6 +266,7 @@ export type IDeleteProgress = {
 
 export type ICompleteSetAction = {
   type: "CompleteSetAction";
+  preserveRest?: boolean;
   entryIndex: number;
   setIndex: number;
   programExercise?: IPlannerProgramExercise;
@@ -721,7 +729,12 @@ export const reducer: IEffectfulReducer = (state, action, effects): IState => {
     } else if (state.storage.currentProgramId != null) {
       const program = Program_getProgram(state, action.programId || state.storage.currentProgramId);
       if (program != null) {
-        const newProgress = Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats);
+        const newProgress = Progress_resumeWorkout(
+          effects,
+          Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats),
+          state.storage.settings,
+          state.storage.subscription
+        );
         return {
           ...state,
           storage: { ...state.storage, progress: [newProgress] },
@@ -815,14 +828,10 @@ export const reducer: IEffectfulReducer = (state, action, effects): IState => {
     if (progress == null) {
       return state;
     }
-    const intervals = History_resumeWorkout(
-      effects,
-      progress,
-      action.isPlayground,
-      state.storage.settings.timers.reminder,
-      action.hasSubscription
+    return Progress_setProgress(
+      state,
+      Progress_resumeWorkout(effects, progress, state.storage.settings, state.storage.subscription, action.isPlayground)
     );
-    return Progress_setProgress(state, { ...progress, intervals });
   } else if (action.type === "UpdateSettings") {
     if (isLoggingEnabled) {
       console.log(`%c-------${action.desc ? ` ${action.desc}` : ""}`, "font-weight:bold");

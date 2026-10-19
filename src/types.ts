@@ -85,6 +85,7 @@ export const exerciseTypes = [
   "inclineChestPress",
   "inclineCurl",
   "inclineRow",
+  "inclineTreadmillWalk",
   "invertedRow",
   "isoLateralChestPress",
   "isoLateralRow",
@@ -162,6 +163,7 @@ export const exerciseTypes = [
   "squat",
   "squatRow",
   "standingCalfRaise",
+  "stationaryBike",
   "stepUp",
   "stiffLegDeadlift",
   "straightLegDeadlift",
@@ -490,6 +492,7 @@ export interface ISet {
   completedRpe?: number;
   completedSetTimer?: number;
   completedSetTimerLeft?: number;
+  cardioLaps?: { phase: "walk" | "jog"; elapsedSeconds: number }[];
   programSetIndex?: number;
 }
 const _VSet = v.object({
@@ -518,6 +521,7 @@ const _VSet = v.object({
   completedRpe: v.optional(v.number()),
   completedSetTimer: v.optional(v.number()),
   completedSetTimerLeft: v.optional(v.number()),
+  cardioLaps: v.optional(v.array(v.object({ phase: v.picklist(["walk", "jog"]), elapsedSeconds: v.number() }))),
   programSetIndex: v.optional(v.number()),
 });
 const _VSetMatches: IEquals<v.InferOutput<typeof _VSet>, ISet> = true;
@@ -970,6 +974,7 @@ export interface IHistoryRecord {
   programId: string;
   programName: string;
   day: number;
+  catchUpFor?: string;
   dayName: string;
   entries: IHistoryEntry[];
   startTime: number;
@@ -999,6 +1004,7 @@ export interface IHistoryRecord {
     startedAt: number;
     nonce?: number;
     keepTiming?: boolean;
+    preserveRest?: boolean;
   };
   // Must stay a sibling of setTimer, never a phase inside it: the watch, the iOS widget and the Android
   // live update all read setTimer's presence as "the work clock is live".
@@ -1011,6 +1017,7 @@ export interface IHistoryRecord {
     startedAt: number;
     getReady: number;
     nonce?: number;
+    preserveRest?: boolean;
   };
   // Lives on the record (not under `ui`) so it's version-tracked and syncs across devices like setTimer — an
   // AMRAP prompt opened on the watch shows in the app and vice versa, and resolving it on either device
@@ -1018,6 +1025,7 @@ export interface IHistoryRecord {
   amrapModal?: {
     entryIndex: number;
     setIndex: number;
+    preserveRest?: boolean;
     isAmrap?: boolean;
     logRpe?: boolean;
     askWeight?: boolean;
@@ -1039,6 +1047,7 @@ const _VHistoryRecord = v.object({
   programId: v.string(),
   programName: v.string(),
   day: v.number(),
+  catchUpFor: v.optional(v.string()),
   dayName: v.string(),
   entries: v.array(VHistoryEntry),
   startTime: v.number(),
@@ -1066,6 +1075,7 @@ const _VHistoryRecord = v.object({
       startedAt: v.number(),
       nonce: v.optional(v.number()),
       keepTiming: v.optional(v.boolean()),
+      preserveRest: v.optional(v.boolean()),
     })
   ),
   setTimerGetReady: v.optional(
@@ -1078,12 +1088,14 @@ const _VHistoryRecord = v.object({
       startedAt: v.number(),
       getReady: v.number(),
       nonce: v.optional(v.number()),
+      preserveRest: v.optional(v.boolean()),
     })
   ),
   amrapModal: v.optional(
     v.object({
       entryIndex: v.number(),
       setIndex: v.number(),
+      preserveRest: v.optional(v.boolean()),
       isAmrap: v.optional(v.boolean()),
       logRpe: v.optional(v.boolean()),
       askWeight: v.optional(v.boolean()),
@@ -1611,8 +1623,8 @@ const _VMuscleGroupsSettingsMatches: IEquals<
 void _VMuscleGroupsSettingsMatches;
 export const VMuscleGroupsSettings: v.GenericSchema<IMuscleGroupsSettings> = _VMuscleGroupsSettings;
 
-// Presentation-only calendar slots. Program days and their progression remain authoritative.
 export const VDevFitSchedule = v.object({
+  setupDismissed: v.optional(v.boolean()),
   cycleDays: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
   anchorDate: v.optional(v.string()),
   days: v.array(

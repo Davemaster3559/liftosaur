@@ -5,6 +5,7 @@ import type { INavigateOpts } from "../navigation/navigationService";
 import type { IAllScreenParamList } from "../navigation/types";
 
 import { getNavigationService } from "../navigation/navUtils";
+import { CatchUp_build } from "../devfit/catchUp";
 import RB from "rollbar";
 import { IGetStorageResponse, IPostSyncResponse, Service } from "../api/service";
 import { lb } from "lens-shmens";
@@ -16,6 +17,7 @@ import {
   Program_isEmpty,
   Program_editAction,
   Program_nextHistoryRecord,
+  Program_getListOfDays,
   Program_create,
   Program_exportProgramToFile,
   Program_exportProgramToLink,
@@ -60,7 +62,13 @@ import { IByExercise } from "../pages/planner/plannerEvaluator";
 import { CollectionUtils_compact, CollectionUtils_setAt } from "../utils/collection";
 import { ImportExporter_exportStorage, ImportExporter_getExportedProgram } from "../lib/importexporter";
 import { Storage_mergeStorage, Storage_isChanged, Storage_get, Storage_setAffiliate } from "../models/storage";
-import { History_exportAsCSV, History_calories, History_pauseWorkoutState } from "../models/history";
+import {
+  History_exportAsCSV,
+  History_calories,
+  History_pauseWorkoutState,
+  History_isActivelyPaused,
+  History_isPaused,
+} from "../models/history";
 import { ImportSession_apply, ImportSession_findEditedRecordIds, ImportSession_undo } from "../models/importSession";
 import { ImportFileError } from "../utils/importTypes";
 import { StringUtils_pluralize } from "../utils/string";
@@ -754,9 +762,6 @@ export function Thunk_updateTimer(
       return;
     }
     const program = Program_getProgram(state, progress.programId);
-    if (!program) {
-      return;
-    }
     const effects: INativeEffect[] = [];
     const newProgress = Progress_updateTimer(
       effects,
@@ -816,7 +821,7 @@ export function Thunk_completeSetExternal(
   return async (dispatch, getState, env) => {
     const state = getState();
     const progress = Progress_getProgress(state);
-    if (!progress) {
+    if (!progress || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     const entry = progress.entries[entryIndex];
@@ -885,7 +890,7 @@ export function Thunk_recordSetTimer(
   return async (dispatch, getState, env) => {
     const state = getState();
     const progress = Progress_getProgress(state);
-    if (!progress) {
+    if (!progress || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     // A native Live Activity / Live Update "Stop & Record"/"Log & keep" tap can arrive stale — the timed set
@@ -965,7 +970,7 @@ export function Thunk_refreshLiveActivity(): IThunk {
   return async (dispatch, getState, env) => {
     const state = getState();
     const progress = Progress_getProgress(state);
-    if (!progress || !Progress_isCurrent(progress)) {
+    if (!progress || !Progress_isCurrent(progress) || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     const program = Program_getFullProgram(state, progress.programId);
@@ -1061,7 +1066,7 @@ export interface IQueueableCountdownTap {
 export function Thunk_startSetTimerWork(queuedTap?: IQueueableCountdownTap): IThunk {
   return async (dispatch, getState, env) => {
     const progress = Progress_getProgress(getState());
-    if (progress == null) {
+    if (progress == null || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     if (queuedTap != null) {
@@ -1251,7 +1256,7 @@ export function Thunk_pushToEditProgram(): IThunk {
   };
 }
 
-export function Thunk_startProgramDay(programId?: string): IThunk {
+export function Thunk_startProgramDay(programId?: string, programDay?: number): IThunk {
   return async (dispatch, getState) => {
     const state = getState();
     const progress = Progress_getCurrentProgress(state);
@@ -1260,8 +1265,27 @@ export function Thunk_startProgramDay(programId?: string): IThunk {
     } else if (state.storage.currentProgramId != null) {
       const program = Program_getProgram(state, programId ?? state.storage.currentProgramId);
       if (program != null) {
-        const newProgress = Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats);
+        if (programDay != null) {
+          if (
+            !Program_getListOfDays(Program_evaluate(program, state.storage.settings)).some(
+              ([id]) => Number(id) === programDay
+            )
+          ) {
+            return;
+          }
+          updateState(
+            dispatch,
+            [lb<IState>().p("storage").p("programs").findBy("id", program.id).p("nextDay").record(programDay)],
+            "Select calendar session"
+          );
+        }
+        const newProgress = Program_nextHistoryRecord(
+          programDay == null ? program : { ...program, nextDay: programDay },
+          state.storage.settings,
+          state.storage.stats
+        );
         updateState(dispatch, [lb<IState>().p("storage").p("progress").record([newProgress])], "Create new progress");
+        dispatch({ type: "ResumeWorkoutAction", isPlayground: false, hasSubscription: false });
         dispatch(Thunk_log("ls-start-workout"));
         // Let the new progress reach StateContext before mounting its screen.
         // Native navigation can otherwise mount against the previous context and
@@ -1272,6 +1296,31 @@ export function Thunk_startProgramDay(programId?: string): IThunk {
         Dialog_alert("No currently selected program");
       }
     }
+  };
+}
+
+export function Thunk_startCatchUp(includeCardio = false): IThunk {
+  return async (dispatch, getState) => {
+    const state = getState();
+    const ongoing = Progress_getCurrentProgress(state);
+    if (ongoing) {
+      dispatch(Thunk_pushScreen("progress", { id: ongoing.id }, { tab: "workout" }));
+      return;
+    }
+    const program = Program_getProgram(state, state.storage.currentProgramId);
+    if (!program) {
+      return;
+    }
+    const record = CatchUp_build(
+      Program_evaluate(program, state.storage.settings),
+      state.storage.settings,
+      state.storage.stats,
+      includeCardio
+    );
+    updateState(dispatch, [lb<IState>().p("storage").p("progress").record([record])], "Start optional catch-up");
+    dispatch({ type: "ResumeWorkoutAction", isPlayground: false, hasSubscription: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dispatch(Thunk_pushScreen("progress", { id: record.id }, { tab: "workout" }));
   };
 }
 
@@ -1385,7 +1434,9 @@ export function Thunk_updateScreenParams<T extends IScreen>(params?: IScreenPara
 
 export function Thunk_maybeRequestReview(): IThunk {
   return async (dispatch, getState) => {
-    if (!DevFitConfig.storeEnabled) return;
+    if (!DevFitConfig.storeEnabled) {
+      return;
+    }
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -1419,7 +1470,9 @@ export function Thunk_maybeRequestReview(): IThunk {
 
 export function Thunk_maybeRequestSignup(): IThunk {
   return async (dispatch, getState) => {
-    if (!DevFitConfig.officialCloudEnabled) return;
+    if (!DevFitConfig.officialCloudEnabled) {
+      return;
+    }
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -1567,7 +1620,35 @@ export function Thunk_finishProgramDay(id: number): IThunk {
 export function Thunk_pauseWorkout(): IThunk {
   return async (dispatch, getState, env) => {
     env.workout.pauseWorkout();
+    if (getState().storage.progress?.[0]?.timer != null) {
+      env.timer.stopTimer();
+    }
     History_pauseWorkoutState(dispatch);
+  };
+}
+
+export function Thunk_restoreWorkout(): IThunk {
+  return async (dispatch, getState, env) => {
+    const state = getState();
+    const progress = Progress_getCurrentProgress(state);
+    if (!progress) {
+      return;
+    }
+    if (History_isPaused(progress.intervals)) {
+      env.workout.pauseWorkout();
+      env.timer.stopTimer();
+      return;
+    }
+    env.workout.resumeWorkout({
+      reminder: state.storage.settings.timers.reminder ?? 0,
+      isStart: false,
+      hasSubscription: false,
+    });
+    if (progress.timer != null && progress.timerSince != null) {
+      dispatch(Thunk_updateTimer(progress.timer, undefined, undefined, true));
+    }
+    dispatch(Thunk_checkSetTimer());
+    dispatch(Thunk_refreshLiveActivity());
   };
 }
 

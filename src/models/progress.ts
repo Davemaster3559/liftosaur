@@ -6,7 +6,13 @@ import {
   Exercise_toKey,
   Exercise_eq,
 } from "./exercise";
-import { Reps_findNextEntryAndSet, Reps_isEmptyOrFinished, Reps_isCompleted, Reps_isEmpty } from "./set";
+import {
+  Reps_findNextEntryAndSet,
+  Reps_findNextSetIndex,
+  Reps_isEmptyOrFinished,
+  Reps_isCompleted,
+  Reps_isEmpty,
+} from "./set";
 import {
   Weight_build,
   Weight_buildAny,
@@ -74,6 +80,7 @@ import {
 } from "../types";
 import { INativeEffect } from "./nativeEffects";
 import { Capabilities_hasLocal } from "../devfit/capabilities";
+import { WorkoutFocus_shouldStartRest } from "../devfit/workoutFocus";
 import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { IPercentage, IScriptErrorHandler, ITimedSetSide } from "../types";
 import { TimedSet_open, TimedSet_recordedFor } from "./timedSet";
@@ -81,6 +88,10 @@ import {
   History_workoutTime,
   History_createCustomEntry,
   History_resumeWorkout,
+  History_isActivelyPaused,
+  History_isPaused,
+  History_pauseTime,
+  History_clockNow,
   History_finishProgramDay,
   History_findLastEntryForExerciseType,
 } from "./history";
@@ -104,6 +115,7 @@ import { Stats_getCurrentMovingAverageBodyweight, Stats_getEmpty } from "./stats
 import { IChangeAMRAPAction, ICompleteSetAction } from "../ducks/reducer";
 import {
   LiveActivityManager_updateProgressLiveActivity,
+  LiveActivityManager_updateLiveActivity,
   LiveActivityManager_updateLiveActivityForNextEntry,
 } from "../utils/liveActivityManager";
 import { ProgramExercise_hasUserPromptedVars } from "./programExercise";
@@ -455,7 +467,7 @@ export function Progress_startTimer(
         ? settings.timers.superset
         : settings.timers[mode] || undefined;
   }
-  if (!timer) {
+  if (!timer && !(isAdjusting && timer === 0 && progress.timerSince != null)) {
     return {
       ...progress,
       timerSince: undefined,
@@ -465,7 +477,7 @@ export function Progress_startTimer(
       timerSetIndex: undefined,
     };
   }
-  if (Capabilities_hasLocal("notifications")) {
+  if (Capabilities_hasLocal("notifications") && !History_isActivelyPaused(progress.intervals)) {
     // A backdated start (rest resumed after the screen was locked past the target) can already be overrun,
     // so only schedule the "rest is over" notification when there's still time left — UNTimeIntervalNotificationTrigger
     // aborts on a non-positive interval.
@@ -593,7 +605,7 @@ export function Progress_updateTimer(
   settings: ISettings,
   subscription: ISubscription | undefined
 ): IHistoryRecord {
-  const timerForPush = newTimer - Math.round((Date.now() - timerSince) / 1000);
+  const timerForPush = newTimer - Math.round((History_clockNow(progress) - timerSince) / 1000);
   if (timerForPush > 0) {
     const newProgress = Progress_startTimer(
       effects,
@@ -667,6 +679,89 @@ export function Progress_maybeApplySuperset(
 export function Progress_stopTimer(effects: INativeEffect[], progress: IHistoryRecord): IHistoryRecord {
   effects.push({ type: "stopTimer" });
   return Progress_stopTimerPure(progress);
+}
+
+export function Progress_resumeWorkout(
+  effects: INativeEffect[],
+  progress: IHistoryRecord,
+  settings: ISettings,
+  subscription?: ISubscription,
+  isPlayground = false
+): IHistoryRecord {
+  if (!History_isPaused(progress.intervals)) {
+    return progress;
+  }
+  const now = Date.now();
+  const pausedAt = History_pauseTime(progress.intervals);
+  const shift = pausedAt == null ? 0 : Math.max(0, now - pausedAt);
+  let resumed: IHistoryRecord = {
+    ...progress,
+    intervals: History_resumeWorkout(
+      effects,
+      progress,
+      isPlayground,
+      settings.timers.reminder,
+      !!subscription && Subscriptions_hasSubscription(subscription)
+    ),
+    timerSince: progress.timerSince == null ? undefined : progress.timerSince + shift,
+    setTimer: progress.setTimer && {
+      ...progress.setTimer,
+      startedAt: progress.setTimer.startedAt + shift,
+      id: shift > 0 ? UidFactory_generateUid(8) : progress.setTimer.id,
+    },
+    setTimerGetReady: progress.setTimerGetReady && {
+      ...progress.setTimerGetReady,
+      startedAt: progress.setTimerGetReady.startedAt + shift,
+      id: shift > 0 ? UidFactory_generateUid(8) : progress.setTimerGetReady.id,
+    },
+  };
+  if (
+    resumed.timer != null &&
+    resumed.timerSince != null &&
+    resumed.timerEntryIndex != null &&
+    resumed.timerSetIndex != null
+  ) {
+    resumed = Progress_startTimer(
+      effects,
+      resumed,
+      resumed.timerSince,
+      resumed.timerMode ?? "workout",
+      resumed.timerEntryIndex,
+      resumed.timerSetIndex,
+      settings,
+      subscription,
+      resumed.timer,
+      true
+    );
+  }
+  const currentEntryIndex = resumed.currentEntryIndex ?? 0;
+  const entry = resumed.entries[currentEntryIndex];
+  const currentSetIndex = entry ? Reps_findNextSetIndex(entry) : -1;
+  if (!isPlayground && resumed.timerSince == null && currentSetIndex >= 0) {
+    LiveActivityManager_updateLiveActivity(
+      effects,
+      resumed,
+      currentEntryIndex,
+      currentSetIndex,
+      undefined,
+      undefined,
+      undefined,
+      settings,
+      subscription
+    );
+  } else {
+    LiveActivityManager_updateLiveActivityForNextEntry(
+      effects,
+      resumed,
+      resumed.timerEntryIndex ?? currentEntryIndex,
+      resumed.timerMode ?? "workout",
+      undefined,
+      settings,
+      subscription,
+      isPlayground
+    );
+  }
+  return resumed;
 }
 
 export function Progress_stopTimerPure(progress: IHistoryRecord): IHistoryRecord {
@@ -1158,7 +1253,8 @@ export function Progress_completeSet(
       nonce: now,
     });
     if (opened != null) {
-      return { ...progress, setTimer: undefined, setTimerGetReady: undefined, ...opened };
+      const restarted = lf(progress).p("entries").i(entryIndex).p("sets").i(setIndex).p("cardioLaps").set(undefined);
+      return { ...restarted, setTimer: undefined, setTimerGetReady: undefined, ...opened };
     }
   }
   const shouldLogRpe = !!set?.logRpe;
@@ -1274,6 +1370,9 @@ export function Progress_getActiveSetTimer(progress: IHistoryRecord): IActiveSet
 }
 
 export function Progress_startSetTimerWork(progress: IHistoryRecord, startedAt: number): IHistoryRecord {
+  if (History_isActivelyPaused(progress.intervals)) {
+    return progress;
+  }
   const getReady = progress.setTimerGetReady;
   // The setTimer != null half is not redundant: a merge can leave both fields set, and a stale "Start now"
   // must not restart a running clock or retarget it at the countdown's set.
@@ -1292,6 +1391,7 @@ export function Progress_startSetTimerWork(progress: IHistoryRecord, startedAt: 
       startedAt,
       // Reusing the nonce is what stops the presenter re-navigating on the flip.
       nonce: getReady.nonce,
+      ...(getReady.preserveRest != null ? { preserveRest: getReady.preserveRest } : {}),
     },
   };
 }
@@ -1427,7 +1527,13 @@ export function Progress_handOffToOtherSide(
   if (opened == null) {
     return progress;
   }
-  return { ...progress, setTimer: undefined, setTimerGetReady: undefined, ...opened };
+  const preserveRest = progress.setTimer?.preserveRest ?? progress.setTimerGetReady?.preserveRest;
+  return {
+    ...progress,
+    ...opened,
+    setTimer: opened.setTimer && { ...opened.setTimer, preserveRest },
+    setTimerGetReady: opened.setTimerGetReady && { ...opened.setTimerGetReady, preserveRest },
+  };
 }
 
 // The single place that decides what happens after a timed set is recorded+completed from its clock.
@@ -1445,6 +1551,9 @@ export function Progress_proceedAfterTimedSet(
   // set-timer modal is closed (and rest started) when amrap resolves; see Progress_changeAmrapAction.
   if (progress.amrapModal != null) {
     return progress;
+  }
+  if (progress.setTimer?.preserveRest || progress.setTimerGetReady?.preserveRest) {
+    return { ...progress, setTimer: undefined, setTimerGetReady: undefined };
   }
   // The playground has no rest timers (like normal-set completion, see below) and doesn't run circuits in real
   // time — just close the banner. No rest, no EMOM/auto advance; the user taps the next set to continue.
@@ -1511,11 +1620,17 @@ export function Progress_closeTimedSet(
   let newProgress: IHistoryRecord = { ...progress, setTimer: undefined, setTimerGetReady: undefined };
   const set = newProgress.entries[stm.entryIndex]?.sets[stm.setIndex];
   // The playground has no rest timers, so discarding a "Log & keep timing" set just closes the banner.
-  if (!isPlayground && set?.isCompleted && set.setTimer != null && newProgress.amrapModal == null) {
+  if (
+    !isPlayground &&
+    !stm.preserveRest &&
+    set?.isCompleted &&
+    set.setTimer != null &&
+    newProgress.amrapModal == null
+  ) {
     newProgress = Progress_startTimer(
       effects,
       newProgress,
-      Date.now(),
+      History_clockNow(progress),
       "workout",
       stm.entryIndex,
       stm.setIndex,
@@ -1537,7 +1652,7 @@ export function Progress_reconcileTimedSet(progress: IHistoryRecord, now: number
 // Cheap pure predicate (no program evaluation) telling whether Progress_checkSetTimer would do anything.
 // Lets per-second pollers skip resolving program context + dispatching when nothing is due.
 export function Progress_isSetTimerCheckDue(progress: IHistoryRecord, now: number): boolean {
-  if (progress.amrapModal != null) {
+  if (progress.amrapModal != null || History_isActivelyPaused(progress.intervals)) {
     return false;
   }
   const getReady = progress.setTimerGetReady;
@@ -1583,7 +1698,7 @@ export function Progress_checkSetTimer(
   isPlayground?: boolean
 ): IHistoryRecord {
   const now = nowArg ?? Date.now();
-  if (progress.amrapModal != null) {
+  if (progress.amrapModal != null || History_isActivelyPaused(progress.intervals)) {
     return progress;
   }
   const current = Progress_reconcileTimedSet(progress, now);
@@ -2241,6 +2356,10 @@ export function Progress_changeAmrapAction(
   subscription: ISubscription | undefined,
   onError?: IScriptErrorHandler
 ): IHistoryRecord {
+  if (Progress_isCurrent(progress) && History_isActivelyPaused(progress.intervals) && !action.isPlayground) {
+    return progress;
+  }
+  const automaticRest = !progress.amrapModal?.preserveRest;
   let newProgress = { ...progress };
   if (
     action.amrapValue == null &&
@@ -2281,10 +2400,21 @@ export function Progress_changeAmrapAction(
       onError
     );
   }
-  if (Progress_isFullyEmptyOrFinishedSet(newProgress)) {
+  if (!automaticRest) {
+    const ownClock =
+      newProgress.setTimer?.entryIndex === action.entryIndex && newProgress.setTimer?.setIndex === action.setIndex;
+    return {
+      ...newProgress,
+      amrapModal: undefined,
+      setTimer: ownClock && !newProgress.setTimer?.keepTiming ? undefined : newProgress.setTimer,
+    };
+  }
+  if (automaticRest && Progress_isFullyEmptyOrFinishedSet(newProgress)) {
     newProgress = Progress_stopTimer(effects, newProgress);
   }
-  newProgress = Progress_maybeApplySuperset(newProgress, action.entryIndex, "workout");
+  if (automaticRest) {
+    newProgress = Progress_maybeApplySuperset(newProgress, action.entryIndex, "workout");
+  }
   // A timed set keeps its set-timer modal open behind the amrap modal (see Progress_proceedAfterTimedSet).
   // If it was recorded via "Log & keep timing" (keepTiming), leave the clock running and don't start rest;
   // otherwise close the banner and start the deferred rest. For non-timed sets setTimerModal is already
@@ -2305,7 +2435,7 @@ export function Progress_changeAmrapAction(
     // time-based-exercises.md §5.2). The time spent in the AMRAP modal is data entry, not rest — backdating
     // would count it as elapsed rest and a short rest could be over the instant the user submits.
     // The playground has no rest timers (matches Progress_proceedAfterTimedSet + normal-set completion).
-    if (!action.isPlayground) {
+    if (!action.isPlayground && automaticRest) {
       newProgress = Progress_startTimer(
         effects,
         newProgress,
@@ -2325,16 +2455,18 @@ export function Progress_changeAmrapAction(
     settings.timers.reminder,
     !!subscription && Subscriptions_hasSubscription(subscription)
   );
-  LiveActivityManager_updateLiveActivityForNextEntry(
-    effects,
-    newProgress,
-    action.entryIndex,
-    "workout",
-    action.programExercise,
-    settings,
-    subscription,
-    action.isPlayground
-  );
+  if (automaticRest) {
+    LiveActivityManager_updateLiveActivityForNextEntry(
+      effects,
+      newProgress,
+      action.entryIndex,
+      "workout",
+      action.programExercise,
+      settings,
+      subscription,
+      action.isPlayground
+    );
+  }
   return { ...newProgress, amrapModal: undefined };
 }
 
@@ -2415,12 +2547,33 @@ export function Progress_completeSetAction(
   subscription: ISubscription | undefined,
   onError?: IScriptErrorHandler
 ): IHistoryRecord {
+  if (Progress_isCurrent(progress) && History_isActivelyPaused(progress.intervals) && !action.isPlayground) {
+    return progress;
+  }
   const setTimerModal = progress.setTimer;
+  const advertised = action.isExternal
+    ? Reps_findNextEntryAndSet(
+        progress,
+        progress.timerEntryIndex ?? progress.currentEntryIndex ?? 0,
+        progress.timerMode ?? action.mode
+      )
+    : undefined;
+  const externalCurrent =
+    advertised != null &&
+    advertised.entry === progress.entries[action.entryIndex] &&
+    advertised.set ===
+      progress.entries[action.entryIndex]?.[action.mode === "warmup" ? "warmupSets" : "sets"][action.setIndex];
+  const focusedProgress = externalCurrent ? { ...progress, currentEntryIndex: action.entryIndex } : progress;
   const wasSetTimerOpen =
     action.mode === "workout" &&
     setTimerModal != null &&
     setTimerModal.entryIndex === action.entryIndex &&
     setTimerModal.setIndex === action.setIndex;
+  const automaticRest =
+    !action.preserveRest &&
+    (wasSetTimerOpen
+      ? !setTimerModal?.preserveRest
+      : WorkoutFocus_shouldStartRest(focusedProgress, action.entryIndex, action.setIndex, action.mode));
   const countdown = progress.setTimerGetReady;
   if (
     action.mode === "workout" &&
@@ -2440,6 +2593,13 @@ export function Progress_completeSetAction(
     return progress;
   }
   const oldSet = progress.entries[action.entryIndex][action.mode === "warmup" ? "warmupSets" : "sets"][action.setIndex];
+  if (
+    oldSet?.setTimer != null &&
+    !wasSetTimerOpen &&
+    (progress.setTimer != null || progress.setTimerGetReady != null)
+  ) {
+    return progress;
+  }
   const timedSide = setTimerModal?.side ?? "bilateral";
   const recordedThisSide = TimedSet_recordedFor(oldSet, timedSide);
 
@@ -2480,16 +2640,18 @@ export function Progress_completeSetAction(
       }
       banked = handedOff;
     }
-    LiveActivityManager_updateLiveActivityForNextEntry(
-      effects,
-      banked,
-      action.entryIndex,
-      action.mode,
-      action.programExercise,
-      settings,
-      subscription,
-      action.isPlayground
-    );
+    if (automaticRest) {
+      LiveActivityManager_updateLiveActivityForNextEntry(
+        effects,
+        banked,
+        action.entryIndex,
+        action.mode,
+        action.programExercise,
+        settings,
+        subscription,
+        action.isPlayground
+      );
+    }
     return banked;
   }
 
@@ -2523,16 +2685,18 @@ export function Progress_completeSetAction(
       settings.timers.reminder,
       !!subscription && Subscriptions_hasSubscription(subscription)
     );
-    LiveActivityManager_updateLiveActivityForNextEntry(
-      effects,
-      stopped,
-      action.entryIndex,
-      action.mode,
-      action.programExercise,
-      settings,
-      subscription,
-      action.isPlayground
-    );
+    if (automaticRest) {
+      LiveActivityManager_updateLiveActivityForNextEntry(
+        effects,
+        stopped,
+        action.entryIndex,
+        action.mode,
+        action.programExercise,
+        settings,
+        subscription,
+        action.isPlayground
+      );
+    }
     return stopped;
   }
 
@@ -2559,6 +2723,9 @@ export function Progress_completeSetAction(
     settings,
     action.isPlayground
   );
+  if (newProgress.amrapModal) {
+    newProgress = { ...newProgress, amrapModal: { ...newProgress.amrapModal, preserveRest: !automaticRest } };
+  }
   const newSet =
     newProgress.entries[action.entryIndex][action.mode === "warmup" ? "warmupSets" : "sets"][action.setIndex];
   const didFinish = !oldSet.isCompleted && newSet.isCompleted;
@@ -2571,21 +2738,36 @@ export function Progress_completeSetAction(
     startedTimer?.entryIndex === action.entryIndex &&
     startedTimer?.setIndex === action.setIndex;
   if (justStartedSetTimer) {
-    // Starting this set's clock means the previous set's rest is over — stop it (and cancel its pending
-    // "rest is over" notification) so it doesn't fire in the middle of this set's clock.
-    if (newProgress.timerSince != null) {
+    newProgress = {
+      ...newProgress,
+      intervals: History_resumeWorkout(
+        effects,
+        newProgress,
+        action.isPlayground,
+        settings.timers.reminder,
+        !!subscription && Subscriptions_hasSubscription(subscription)
+      ),
+      setTimer: newProgress.setTimer && { ...newProgress.setTimer, preserveRest: !automaticRest },
+      setTimerGetReady: newProgress.setTimerGetReady && {
+        ...newProgress.setTimerGetReady,
+        preserveRest: !automaticRest,
+      },
+    };
+    if (automaticRest && newProgress.timerSince != null) {
       newProgress = Progress_stopTimer(effects, newProgress);
     }
-    LiveActivityManager_updateLiveActivityForNextEntry(
-      effects,
-      newProgress,
-      action.entryIndex,
-      action.mode,
-      action.programExercise,
-      settings,
-      subscription,
-      action.isPlayground
-    );
+    if (automaticRest) {
+      LiveActivityManager_updateLiveActivityForNextEntry(
+        effects,
+        newProgress,
+        action.entryIndex,
+        action.mode,
+        action.programExercise,
+        settings,
+        subscription,
+        action.isPlayground
+      );
+    }
     return newProgress;
   }
   if (action.programExercise && !newProgress.amrapModal) {
@@ -2602,15 +2784,13 @@ export function Progress_completeSetAction(
     );
   }
 
-  if (Progress_isFullyEmptyOrFinishedSet(newProgress)) {
+  if (automaticRest && Progress_isFullyEmptyOrFinishedSet(newProgress)) {
     newProgress = Progress_stopTimer(effects, newProgress);
   }
-  if (didFinish) {
+  if (didFinish && automaticRest) {
     newProgress = Progress_maybeApplySuperset(newProgress, action.entryIndex, action.mode);
   }
-  // Non-timed sets start their rest timer here. Timed sets defer it to Progress_proceedAfterTimedSet
-  // (below) so a set logged via "Log & keep timing" doesn't start resting while its clock still runs.
-  if (!action.isPlayground && newSet.setTimer == null) {
+  if (!action.isPlayground && newSet.setTimer == null && didFinish && automaticRest) {
     newProgress = Progress_startTimer(
       effects,
       newProgress,
@@ -2654,16 +2834,18 @@ export function Progress_completeSetAction(
     settings.timers.reminder,
     !!subscription && Subscriptions_hasSubscription(subscription)
   );
-  LiveActivityManager_updateLiveActivityForNextEntry(
-    effects,
-    newProgress,
-    action.entryIndex,
-    action.mode,
-    action.programExercise,
-    settings,
-    subscription,
-    action.isPlayground
-  );
+  if (automaticRest) {
+    LiveActivityManager_updateLiveActivityForNextEntry(
+      effects,
+      newProgress,
+      action.entryIndex,
+      action.mode,
+      action.programExercise,
+      settings,
+      subscription,
+      action.isPlayground
+    );
+  }
   // The pager scrolls only on a flip of this flag; the superset advance above moves currentEntryIndex
   // without one, and timed-set completions dispatch with the flag off, so the thumbnail moved while the
   // card stayed. An EMOM advance already flipped it — flip exactly once.
@@ -2725,7 +2907,8 @@ export function Progress_finishWorkout(
     Progress_isCurrent(progress) && program != null
       ? Program_runAllFinishDayScripts(program, progress, storage.stats, settings)
       : { program, exerciseData };
-  const newPrograms = newProgram != null ? lf(storage.programs).i(programIndex).set(newProgram) : storage.programs;
+  const newPrograms =
+    newProgram != null && programIndex >= 0 ? lf(storage.programs).i(programIndex).set(newProgram) : storage.programs;
   const newSettingsExerciseData = deepmerge(storage.settings.exerciseData, newExerciseData);
   return {
     ...storage,

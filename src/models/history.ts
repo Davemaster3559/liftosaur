@@ -1021,6 +1021,25 @@ export function History_isPaused(intervals?: IIntervals): boolean {
   return intervals ? intervals.length === 0 || intervals[intervals.length - 1][1] != null : false;
 }
 
+export function History_isActivelyPaused(intervals?: IIntervals): boolean {
+  return !!intervals && intervals.length > 0 && intervals[intervals.length - 1][1] != null;
+}
+
+export function History_pauseTime(intervals?: IIntervals): number | undefined {
+  return History_isActivelyPaused(intervals) ? intervals![intervals!.length - 1][1]! : undefined;
+}
+
+export function History_clockNow(progress: Pick<IHistoryRecord, "intervals">, now = Date.now()): number {
+  return History_pauseTime(progress.intervals) ?? now;
+}
+
+export function History_isNotStarted(progress: Pick<IHistoryRecord, "intervals" | "entries">): boolean {
+  return (
+    progress.intervals?.length === 0 &&
+    !progress.entries.some((e) => e.sets.some((s) => s.isCompleted) || e.warmupSets.some((s) => s.isCompleted))
+  );
+}
+
 export function History_resumeWorkout(
   effects: INativeEffect[],
   historyRecord: IHistoryRecord,

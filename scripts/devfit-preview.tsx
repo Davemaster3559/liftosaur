@@ -20,9 +20,12 @@ import { IDispatch } from "../src/ducks/types";
 import { DevFitAction } from "../src/devfit/ui";
 import { Footer2View } from "../src/components/footer2";
 import { IHistoryRecord } from "../src/types";
+import { History_isPaused, History_pauseWorkout } from "../src/models/history";
+import { Progress_resumeWorkout } from "../src/models/progress";
+import { Schedule_anchor } from "../src/devfit/schedule";
 
 const { program, schedule } = DevFitRotation_fixture();
-const settings = { ...Settings_build(), devfitSchedules: { [program.id]: schedule } };
+const settings = { ...Settings_build(), devfitSchedules: { [program.id]: Schedule_anchor(schedule, 10, Date.now()) } };
 const stats = Stats_getEmpty();
 const evaluated = Program_evaluate(program, settings);
 const progress = Program_nextHistoryRecord(program, settings, stats);
@@ -61,6 +64,15 @@ const subscription = { apple: [], google: [] };
 const cardio = Program_nextHistoryRecord({ ...program, nextDay: 1 }, settings, stats);
 
 function Preview(): JSX.Element {
+  const [workout, setWorkout] = useState<IHistoryRecord>({
+    ...progress,
+    intervals: [[Date.now() - 600000, undefined]],
+    timer: 60,
+    timerSince: Date.now() - 77000,
+    timerMode: "workout",
+    timerEntryIndex: 0,
+    timerSetIndex: 0,
+  });
   const [screen, setScreen] = useState("Today");
   const [dark, setDark] = useState(true);
   const [large, setLarge] = useState(false);
@@ -125,6 +137,7 @@ function Preview(): JSX.Element {
               onProgress={() => setScreen("Progress")}
               onHistory={noop}
               onChooseDay={noop}
+              onCatchUp={() => setScreen("Workout")}
             />
           )}
           {screen === "Schedule" && (
@@ -138,13 +151,20 @@ function Preview(): JSX.Element {
           )}
           {screen === "Workout" && (
             <DevFitWorkout
-              progress={progress}
+              progress={workout}
               history={history}
               program={evaluated}
               settings={settings}
               subscription={subscription}
               dispatch={dispatch}
               onAdvanced={noop}
+              onPauseResume={() =>
+                setWorkout((p) =>
+                  History_isPaused(p.intervals)
+                    ? Progress_resumeWorkout([], p, settings)
+                    : { ...p, intervals: History_pauseWorkout(p.intervals) }
+                )
+              }
               finish={<DevFitAction label="Finish workout" onPress={() => setScreen("Finish")} />}
             />
           )}

@@ -156,9 +156,6 @@
     "decision-in-view:useCallback#1": "predates the rule",
     "decision-in-view:useEffect#1": "predates the rule"
   },
-  "src/components/restTimer.tsx": {
-    "decision-in-view:useEffect#1": "predates the rule"
-  },
   "src/components/screenAccount.tsx": {
     "long-view": "predates the rule"
   },
@@ -189,6 +186,10 @@
   "src/components/scrollBarrell.tsx": {
     "decision-in-view:useEffect#1": "predates the rule"
   },
+  "src/components/setTimerBanner.tsx": {
+    "long-view": "one timed-set modal: legacy strength body and shared effect/controller wiring; cardio rendering is delegated to DevFitCardioTimer",
+    "decision-in-view:recordSetTimer": "dispatch adapter: Session_timedRecordingSet owns recording values; this applies its result and routes playground versus native actions"
+  },
   "src/components/selectLink.tsx": {
     "decision-in-view:onPress": "predates the rule"
   },
@@ -204,6 +205,7 @@
     "long-view": "predates the rule"
   },
   "src/components/workoutExerciseSet.tsx": {
+    "decision-in-view:useCallback#1": "completion event adapter flushes the focused keyboard, runs platform haptics and dispatches the engine action; timed defaults come from Session_timedRecordingSet",
     "long-view": "one set row: its dispatch callbacks and the props both bodies share; rendering lives in workoutExerciseSetCompact.tsx and workoutExerciseSetExpanded.tsx"
   },
   "src/components/workoutMenu.tsx": {

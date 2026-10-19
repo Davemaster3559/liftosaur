@@ -3,7 +3,11 @@ import { Exercise_get } from "../models/exercise";
 import { Weight_build } from "../models/weight";
 import { IEvaluatedProgramDay, Program_getProgramDayUsedExercises, Program_dayApproxTimeMs } from "../models/program";
 import { IPlannerProgramExercise } from "../pages/planner/models/types";
-import { PlannerProgramExercise_currentEvaluatedSetVariation } from "../pages/planner/models/plannerProgramExercise";
+import {
+  PlannerProgramExercise_currentEvaluatedSetVariation,
+  PlannerProgramExercise_currentDescription,
+  PlannerProgramExercise_getState,
+} from "../pages/planner/models/plannerProgramExercise";
 
 export type ISessionKind = "strength" | "running" | "cardio" | "mixed" | "recovery";
 export const SESSION_LABELS: Record<ISessionKind, string> = {
@@ -27,11 +31,20 @@ export function Session_timing(entry: IHistoryEntry): { work: number; rest: numb
 
 export function Session_kind(name: string, labels: string[] = []): ISessionKind {
   const text = [name, ...labels].join(" ");
+  if (/\b(run(?:ning)?(?:[ _-]*[ab])?\d*|jog(?:ging)?)\b/i.test(text)) {
+    return "running";
+  }
+  if (
+    /\b(incline\s+treadmill\s+walk|treadmill\s+walk|incline\s+walk|stationary\s+bike)\b/i.test(text) &&
+    !/\b(run(?:ning)?[ _-]?[ab]?|jog(?:ging)?)\b/i.test(text)
+  ) {
+    return "cardio";
+  }
   if (/\b(run(?:ning)?[ _-]?[ab]?|jog(?:ging)?|treadmill)\b/i.test(text)) {
     return "running";
   }
   if (
-    /\b(cardio|elliptical|bike(?:stairs)?|cycling|cycle ride|stair(?:s|master)?|endurance|rowing machine|swim(?:ming)?)\b/i.test(
+    /\b(cardio|elliptical|bike(?:stairs)?|stationary\s+bike|incline.*walk|cycling|cycle ride|stair(?:s|master)?|endurance|rowing machine|swim(?:ming)?)\b/i.test(
       text
     )
   ) {
@@ -99,29 +112,118 @@ export function Session_day(
   };
 }
 
+function resolveExerciseDescription(
+  exercise: IPlannerProgramExercise | undefined,
+  entry?: IHistoryEntry
+): string | undefined {
+  let current: IPlannerProgramExercise | undefined = exercise;
+  const visited = new Set<IPlannerProgramExercise>();
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    const active = PlannerProgramExercise_currentDescription(current);
+    if (active) {
+      return active;
+    }
+    current = current.descriptions.reuse?.exercise ?? current.reuse?.exercise;
+  }
+  return entry?.descriptionSnapshot;
+}
+
 export function Session_cardioIntent(
   exercise: IPlannerProgramExercise | undefined,
-  entry: IHistoryEntry,
+  entry: IHistoryEntry | undefined,
   settings: ISettings
 ): string {
-  const description =
-    exercise?.descriptions.values
-      .filter((d) => d.isCurrent)
-      .map((d) => d.value)
-      .join(" ") || entry.descriptionSnapshot;
-  if (description) {
-    return description;
-  }
+  return resolveExerciseDescription(exercise, entry) ?? Session_cardioCoaching(exercise, entry, settings).mainTarget;
+}
+
+export interface ICardioCoachingSummary {
+  instructions?: string;
+  warmup: string;
+  mainTarget: string;
+  recovery?: string;
+  then?: string;
+  progressionRule: string;
+}
+
+export function Session_cardioCoaching(
+  exercise: IPlannerProgramExercise | undefined,
+  entry: IHistoryEntry | undefined,
+  settings: ISettings
+): ICardioCoachingSummary {
+  const description = resolveExerciseDescription(exercise, entry);
+  const warmup = description?.match(/Warm-?up:\s*([\s\S]+?)(?=\s*Main(?:\s+Incline\/Jog)?\s+Target:|$)/i)?.[1]?.trim();
+  const main = description
+    ?.match(/Main(?:\s+Incline\/Jog)?\s+Target:\s*([\s\S]+?)(?=\s*Progression(?:\s+Rule)?:|$)/i)?.[1]
+    ?.trim();
+  const progression = description?.match(/Progression(?:\s+Rule)?:\s*([\s\S]+)$/i)?.[1]?.trim();
+  const kind = Session_exerciseKind(exercise, entry, settings);
   const label = exercise?.label ?? "";
-  if (/^run[ _-]?a$/i.test(label)) {
-    return "Continuous jog · keep an easy, conversational effort.";
+  const name = exercise?.name ?? (entry ? Exercise_get(entry.exercise, settings.exercises).name : "");
+  const sets = entry?.sets ?? (exercise ? PlannerProgramExercise_currentEvaluatedSetVariation(exercise).sets : []);
+  const total = sets.reduce((n, s, i) => n + Session_setDuration(s) + (i < sets.length - 1 ? (s.timer ?? 0) : 0), 0);
+  const duration = total > 0 ? `${Session_minutes(total)} total planned` : "your programmed duration";
+  const isB = /\brun[ _-]*b\d*\b/i.test(`${label} ${name}`);
+  const intervals = isB || sets.length > 1;
+  const state = exercise ? PlannerProgramExercise_getState(exercise) : (entry?.state ?? {});
+  const continuous = Object.entries(state).find(
+    ([key, value]) =>
+      /(?:continuous|run|jog)(?:target)?(?:minutes|mins|seconds|secs)$/i.test(key.replace(/[_ -]/g, "")) &&
+      typeof value === "number" &&
+      value > 0
+  );
+  const continuousSeconds =
+    continuous && typeof continuous[1] === "number" ? continuous[1] * (/min/i.test(continuous[0]) ? 60 : 1) : undefined;
+  if (kind === "running") {
+    const target = continuousSeconds != null ? `Continuous jog target: ${Session_minutes(continuousSeconds)}. ` : "";
+    return {
+      instructions: description && !(warmup && main && progression) ? description : undefined,
+      warmup: warmup ?? "Start with 5 min of easy walking within your session.",
+      mainTarget: `${target}${main ?? (intervals ? `Run/walk endurance intervals · ${duration}. Follow the work segments below; walk during the planned recovery timer.` : `Easy jog / walk · ${duration}. Follow your program's continuous jog target at a comfortable pace.`)}`,
+      recovery:
+        "Walk for 2–3 min as needed between continuous jog efforts, unless your plan gives a different recovery.",
+      then: intervals
+        ? "Continue the programmed intervals. Work and recovery clocks advance through the actual plan."
+        : "Jog again, then walk easily to finish the planned session. Switch phase to track walk and jog time.",
+      progressionRule:
+        progression ??
+        (intervals
+          ? "Follow your program's interval progression. Keep recovery comfortable."
+          : "Complete the current continuous target twice comfortably before increasing it in your program."),
+    };
   }
-  if (/^run[ _-]?b$/i.test(label)) {
-    return "Run / walk intervals · follow your planned work and recovery segments.";
-  }
-  return Session_exerciseKind(exercise, entry, settings) === "running"
-    ? "Easy, controlled effort. Follow the duration and instructions in your plan."
-    : "Follow your planned duration and effort. Time is your primary target.";
+  const walk = /incline|walk/i.test(`${label} ${name}`);
+  return {
+    instructions: description && !(warmup && main && progression) ? description : undefined,
+    warmup: warmup ?? "Begin with 2–3 min at an easy pace.",
+    mainTarget:
+      main ??
+      (walk
+        ? `Incline treadmill walk · ${duration}. Around 5% incline if comfortable; choose your own speed.`
+        : `Steady cardio · ${duration}. Use the programmed equipment and a comfortable pace.`),
+    progressionRule:
+      progression ?? "Follow your program's duration or resistance targets. Change speed only when you choose.",
+  };
+}
+
+export function Session_phase(set: ISet, elapsedSeconds: number): { phase: "walk" | "jog"; seconds: number } {
+  const last = set.cardioLaps?.[set.cardioLaps.length - 1];
+  return { phase: last?.phase ?? "walk", seconds: Math.max(0, elapsedSeconds - (last?.elapsedSeconds ?? 0)) };
+}
+
+export function Session_switchPhase(set: ISet, elapsedSeconds: number): ISet {
+  const current = Session_phase(set, elapsedSeconds);
+  const last = set.cardioLaps?.[set.cardioLaps.length - 1];
+  return {
+    ...set,
+    cardioLaps: [
+      ...(set.cardioLaps ?? []),
+      {
+        phase: current.phase === "walk" ? "jog" : "walk",
+        elapsedSeconds: Math.max(last?.elapsedSeconds ?? 0, Math.floor(elapsedSeconds), 0),
+      },
+    ],
+  };
 }
 
 export function Session_setDuration(

@@ -1,4 +1,4 @@
-import { JSX, ReactNode, memo, useMemo, useState } from "react";
+import { JSX, ReactNode, memo, useCallback, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 import { lb } from "lens-shmens";
 import { Text } from "../components/primitives/text";
@@ -8,21 +8,24 @@ import { IHistoryRecord, ISettings, ISubscription } from "../types";
 import { IDispatch } from "../ducks/types";
 import { IEvaluatedProgram, Program_getProgramExercise } from "../models/program";
 import { Exercise_get, Exercise_toKey } from "../models/exercise";
-import { History_buildPrevExerciseData } from "../models/history";
+import { History_buildPrevExerciseData, History_isActivelyPaused, History_isPaused } from "../models/history";
+import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { updateProgress } from "../models/state";
 import { useRem } from "../utils/useRem";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { WorkoutFocus_active, WorkoutFocus_sets } from "./workoutFocus";
 import {
+  Session_cardioCoaching,
   Session_cardioIntent,
   Session_completion,
   Session_exerciseKind,
   Session_minutes,
   Session_displayName,
 } from "./presentation";
-import { Thunk_pushExerciseStatsScreen, Thunk_pushToEditProgramExercise } from "../ducks/thunks";
+import { Thunk_pauseWorkout, Thunk_pushExerciseStatsScreen, Thunk_pushToEditProgramExercise } from "../ducks/thunks";
 import { Progression_brief, Progression_sets } from "./progression";
 import { DevFitActiveSet } from "./activeSet";
+import { DevFitWorkoutClock } from "./workoutClock";
 import { DevFitRestPanel } from "./restPanel";
 import { DevFitAction, DevFitBar, DevFitColumns, DevFitSection, DevFitSurface, DevFitTag, DevFitTitle } from "./ui";
 import { DevFitPage } from "./page";
@@ -37,12 +40,28 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
   subscription: ISubscription;
   dispatch: IDispatch;
   onAdvanced: () => void;
+  onPauseResume?: () => void;
   finish: ReactNode;
   menu?: ReactNode;
 }): JSX.Element {
   const { progress, settings } = props;
   const c = Tailwind_semantic().devfit;
   const rem = useRem();
+  const handlePauseResume = useCallback(() => {
+    if (props.onPauseResume) {
+      props.onPauseResume();
+      return;
+    }
+    if (History_isPaused(progress.intervals)) {
+      props.dispatch({
+        type: "ResumeWorkoutAction",
+        isPlayground: false,
+        hasSubscription: Subscriptions_hasSubscription(props.subscription),
+      });
+    } else {
+      props.dispatch(Thunk_pauseWorkout());
+    }
+  }, [props.onPauseResume, props.dispatch, props.subscription, progress.intervals]);
   const entryIndex = Math.min(progress.currentEntryIndex ?? 0, Math.max(0, progress.entries.length - 1));
   const entry = progress.entries[entryIndex];
   const [selected, setSelected] = useState<{ entryId: string; setId: string }>();
@@ -71,6 +90,7 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
   const active = WorkoutFocus_active(entry, selected?.entryId === entry.id ? selected.setId : undefined);
   const kind = Session_exerciseKind(programExercise, entry, settings);
   const cardio = kind === "running" || kind === "cardio";
+  const cardioCoaching = cardio ? Session_cardioCoaching(programExercise, entry, settings) : undefined;
   const allSets = WorkoutFocus_sets(entry);
   return (
     <DevFitPage testID="devfit-workout">
@@ -80,6 +100,7 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
         subtitle={`${completion.completed} of ${completion.total} sets logged · saved on this device`}
         action={props.menu}
       />
+      <DevFitWorkoutClock progress={progress} onPauseResume={handlePauseResume} />
       <DevFitBar value={completion.completed} total={completion.total} />
       <DevFitColumns
         primary={
@@ -117,13 +138,51 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
             </View>
             <DevFitRestPanel progress={progress} settings={settings} dispatch={props.dispatch} />
             {cardio && (
-              <DevFitSurface>
+              <DevFitSurface testID="devfit-cardio-summary-card">
                 <Text className="font-semibold" style={{ color: c.cardio }}>
                   {kind === "running" ? "Your running session" : "Your cardio session"}
                 </Text>
                 <Text className="text-sm" style={{ color: c.muted }}>
                   {Session_cardioIntent(programExercise, entry, settings)}
                 </Text>
+                {cardioCoaching && (
+                  <View style={{ gap: 8, paddingTop: 4 }}>
+                    <View style={{ gap: 2 }}>
+                      <Text className="text-xs font-bold" style={{ color: c.cardio }}>
+                        1. Warm-up
+                      </Text>
+                      <Text className="text-sm" style={{ color: c.ink }}>
+                        {cardioCoaching.warmup}
+                      </Text>
+                    </View>
+                    <View style={{ gap: 2 }}>
+                      <Text className="text-xs font-bold" style={{ color: c.cardio }}>
+                        2. Main target
+                      </Text>
+                      <Text className="text-sm" style={{ color: c.ink }}>
+                        {cardioCoaching.mainTarget}
+                      </Text>
+                    </View>
+                    <View style={{ gap: 2 }}>
+                      <Text className="text-xs font-bold" style={{ color: c.cardio }}>
+                        3. Progression Rule
+                      </Text>
+                      <Text className="text-sm" style={{ color: c.ink }}>
+                        {cardioCoaching.progressionRule}
+                      </Text>
+                    </View>
+                    {cardioCoaching.recovery && (
+                      <Text className="text-sm" style={{ color: c.ink }}>
+                        Recovery: {cardioCoaching.recovery}
+                      </Text>
+                    )}
+                    {cardioCoaching.then && (
+                      <Text className="text-sm" style={{ color: c.ink }}>
+                        Then: {cardioCoaching.then}
+                      </Text>
+                    )}
+                  </View>
+                )}
                 {entry.sets.some((s) => s.label) && (
                   <View style={{ gap: 8 }}>
                     {entry.sets.map((s, i) => (
@@ -135,10 +194,19 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                 )}
               </DevFitSurface>
             )}
-            {active ? (
+            {History_isActivelyPaused(progress.intervals) ? (
+              <DevFitSurface>
+                <Text style={{ color: c.muted }}>
+                  Workout and rest/cardio clocks are paused. Resume to log your next set.
+                </Text>
+                <DevFitAction label="Resume workout" onPress={handlePauseResume} />
+              </DevFitSurface>
+            ) : active ? (
               <WorkoutExerciseSet
                 key={active.set.id}
+                progressId={progress.id}
                 renderBody={renderActiveSet}
+                preserveRest={selected?.entryId === entry.id}
                 isExpanded
                 isNext
                 isCurrentProgress

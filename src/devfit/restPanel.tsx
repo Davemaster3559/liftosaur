@@ -3,9 +3,9 @@ import { View } from "react-native";
 import { Text } from "../components/primitives/text";
 import { IHistoryRecord, ISettings } from "../types";
 import { IDispatch } from "../ducks/types";
-import { RestTimerProgress_at } from "../models/restTimerProgress";
+import { RestTimerProgress_at, RestTimerProgress_context } from "../models/restTimerProgress";
 import { Reps_findNextEntryAndSetIndex } from "../models/set";
-import { Exercise_get } from "../models/exercise";
+import { History_clockNow, History_pauseTime } from "../models/history";
 import { Thunk_updateTimer } from "../ducks/thunks";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { Session_minutes } from "./presentation";
@@ -17,50 +17,57 @@ export const DevFitRestPanel = memo(function DevFitRestPanel(props: {
   dispatch: IDispatch;
 }): JSX.Element | null {
   const { timer, timerSince } = props.progress;
+  const pausedAt = History_pauseTime(props.progress.intervals);
   const [, tick] = useState(0);
   useEffect(() => {
-    if (timerSince == null) {
-      return;
+    if (timerSince == null || pausedAt != null) {
+      return undefined;
     }
     const id = setInterval(() => tick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [timerSince]);
+  }, [timerSince, pausedAt]);
   if (timer == null || timerSince == null) {
     return null;
   }
   const c = Tailwind_semantic().devfit;
-  const time = RestTimerProgress_at(timerSince, timer, Date.now());
+  const time = RestTimerProgress_at(timerSince, timer, History_clockNow(props.progress));
+  const context = RestTimerProgress_context(props.progress, props.settings);
   const next =
-    props.progress.timerEntryIndex != null && props.progress.timerMode != null
-      ? Reps_findNextEntryAndSetIndex(props.progress, props.progress.timerEntryIndex, props.progress.timerMode)
+    props.progress.timerEntryIndex != null
+      ? Reps_findNextEntryAndSetIndex(
+          props.progress,
+          props.progress.timerEntryIndex,
+          props.progress.timerMode ?? "workout"
+        )
       : undefined;
-  const nextEntry = next && props.progress.entries[next.entryIndex];
+  const remaining = Math.ceil(time.remainingMs / 1000);
+  const overtime = Math.floor(Math.max(0, time.elapsedMs / 1000 - timer));
   return (
     <DevFitSurface testID="devfit-rest-panel">
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 10,
-        }}
-      >
-        <DevFitTag label={time.isTimeOut ? "Rest complete" : "Recover"} success />
-        <Text className="text-3xl font-bold" testID="devfit-rest-remaining" style={{ color: c.success }}>
-          {Session_minutes(Math.max(0, time.remainingMs) / 1000)}
-        </Text>
-      </View>
+      <DevFitTag
+        label={pausedAt != null ? "Rest paused" : time.isTimeOut ? "Rest complete" : "Resting after"}
+        success
+      />
+      <Text className="text-base font-semibold" testID="devfit-rest-context" style={{ color: c.ink }}>
+        {context.after}
+      </Text>
+      <Text className="text-3xl font-bold" testID="devfit-rest-remaining" style={{ color: c.success }}>
+        {time.isTimeOut
+          ? `+${Session_minutes(overtime).padStart(5, "0")} overtime`
+          : `${Session_minutes(remaining).padStart(5, "0")} remaining`}
+      </Text>
       <DevFitBar value={Math.min(timer, time.elapsedMs / 1000)} total={timer} />
       <Text className="text-xs" style={{ color: c.muted }}>
-        {Session_minutes(time.elapsedMs / 1000)} elapsed · {Session_minutes(timer)} total
-        {nextEntry
-          ? ` · Next: ${Exercise_get(nextEntry.exercise, props.settings.exercises).name}, set ${next!.setIndex + 1}`
-          : ""}
+        {Session_minutes(time.elapsedMs / 1000)} rested · {Session_minutes(timer)} planned
       </Text>
+      {context.next && (
+        <Text testID="devfit-rest-next" className="text-sm" style={{ color: c.ink }}>
+          Next: {context.next}
+        </Text>
+      )}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <DevFitAction
-          label="−15 sec"
+          label="-15s"
           testID="devfit-rest-minus"
           secondary
           onPress={() =>
@@ -68,13 +75,13 @@ export const DevFitRestPanel = memo(function DevFitRestPanel(props: {
           }
         />
         <DevFitAction
-          label="+15 sec"
+          label="+15s"
           testID="devfit-rest-plus"
           secondary
           onPress={() => props.dispatch(Thunk_updateTimer(timer + 15, next?.entryIndex, next?.setIndex, false))}
         />
         <DevFitAction
-          label="Skip rest"
+          label="Skip"
           testID="devfit-rest-skip"
           secondary
           onPress={() => props.dispatch({ type: "StopTimer" })}

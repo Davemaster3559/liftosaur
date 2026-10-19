@@ -4,14 +4,16 @@ Personal Android fork of [Liftosaur](https://github.com/astashov/liftosaur), bas
 
 DevFit uses package `com.devfit.app` and installs alongside Liftosaur. The internal React Native component retains its upstream name so native registration remains compatible.
 
-## DevFit 0.2 experience
+## DevFit 0.3 experience
 
 Today, Schedule, Progress and Me are the primary destinations. An active workout remains one tap away. The dark-first interface uses original DevFit surfaces, readable targets and large controls, with a light theme as well.
 
-- **Today:** the actual next session, estimated strength duration or programmed cardio duration, exercise order, recovery context and recent activity.
+- **Today:** the session on today's anchored rotation date, estimated strength duration or programmed cardio duration, exercise order, recovery context and recent activity. A mismatch with the sequential program pointer offers Use today's session. Missing workouts never shifts the anchor.
 - **Training:** one focused set controller, warmups before work, previous-result reuse, Last / Today / Next, plates, a set timeline and a session lineup. Workout tools retain the complete exercise grid, swaps, notes, supersets and target editors.
+- **Clocks and logging:** Start opens the workout interval immediately. Pause freezes workout, rest, get-ready and timed work together; Resume excludes the paused duration and restores native timers. The same clock and Pause/Resume controls appear inside the cardio modal. Rest names its source exercise/set, previews the next target, and retains overtime. Explicit timeline edits preserve current rest; current sets can start new rest even when completed rapidly. Rep buttons change by one; weight buttons use existing equipment stacks, plates, units or the exercise's configured step. Weight setup opens the existing equipment editor. Raw progression calculations and manual loads remain unchanged.
 - **Running and cardio:** time-first controls, actual segment labels, work and recovery totals, recorded duration and adherence. Explicit AMRAP, RPE, load and custom-state prompts remain supported. Distance, pace and GPS are not inferred.
-- **Schedule:** a human-readable rotation with training, recovery, work and off days. Use Arrange rotation to assign existing program sessions; tap a day and choose Make this day today to anchor calendar dates. Recovery needs no fake workout. Calendar placement does not change Liftoscript or engine progression; Train this session explicitly selects the program day.
+- **Schedule:** a human-readable rotation with training, recovery, work and off days. Use Arrange rotation to assign existing program sessions; tap a day and choose Make this day today to anchor calendar dates. A dismissible setup card helps unanchored 14-day programs. Recovery days never count as missed. The last two rotations' missed sessions are classified by training type. Missed upper and lower work may offer optional Full-Body Catch-Up on an off training day. This creates an ad-hoc session using available program exercises and loads, with optional easy cardio; finishing it leaves the main program order intact.
+- **Running:** numbered Run A/B labels classify consistently. The timer displays the actual description, planned segments and available continuous-run state target. Single running segments offer walk/jog phase changes using the existing clock. No default speed is forced. Incline Treadmill Walk and Stationary Bike are available exercises; the example rotation retains direct lateral raises. Existing user programs are never replaced.
 - **Progress:** strength sets/volume/PRs, running and endurance counts, recorded versus programmed cardio time, muscle frequency, bodyweight and cautious strength estimates. Existing graphs and weekly insights remain available.
 - **Completion and Me:** compact saved-session results and actual updated targets; prominent JSON backup/import and grouped local settings.
 
@@ -33,6 +35,8 @@ npm run devfit:apk
 Android components: platform 36, build tools 36.0.0, NDK 27.1.12297006. Gradle uses the project's wrapper. Linux/macOS may need `chmod +x android/gradlew`. The output is `android/app/build/outputs/apk/release/app-release.apk`.
 
 The initial APK uses the public React Native template development signing key, downloaded from a pinned official template revision and verified by SHA-256. Keystore files stay out of Git. This avoids CI signing secrets and keeps test updates compatible. It is intended for personal testing. A production distribution needs a private signing key configured in the ignored `android/devfit-keystore.properties`; changing keys requires backing up data before uninstall/reinstall. Upstream signing properties are not used.
+
+Version 0.3.0 uses versionCode 3 and the same package, storage keys and signer as 0.2.0. CI checks the signing certificate against the downloaded v0.2 APK's SHA-256 certificate fingerprint `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. Install the update over v0.2. No destructive migration is needed: phase laps, rest intent, setup dismissal and catch-up provenance are optional validated fields. Old JSON profiles remain valid.
 
 ## Personal behavior
 
@@ -56,7 +60,9 @@ npm run test:devfit
 npm run test:devfit:render
 ```
 
-The offline lifecycle test logs a set, reloads persisted in-progress data, finishes the workout, reopens history and verifies real progression without any network calls. The domain suite has 275 tests, including the mixed rotation, recovery, DST dates, cardio totals, optional-settings JSON compatibility and actual saved progression targets. The 22 native interaction/render tests include Today → Start, edited keypad reps, rest controls, offline cardio recording, unilateral side transitions, automatic cardio intervals, Schedule arrangement, retained grid performance, graphs and contextual Health Connect settings. These use mocked native bridges and do not prove OS behavior.
+The offline lifecycle test seeds a profile with programs, custom exercises, measurements, equipment and schedule metadata, starts immediately, pauses, persists/reopens, resumes, finishes and verifies real progression with no network calls. Domain tests cover serialized clock freeze/resume, rest intent and cues, equipment stacks/small steps/plates, anchored dates, catch-up isolation, numbered running labels and phase persistence. Native interaction/render tests cover compact/unfolded Today → Start, edited keypad reps, rapid current sets, pause inside cardio, rest controls, equipment setup navigation, unilateral transitions, automatic intervals and Schedule/catch-up. These use mocked native bridges and do not prove OS behavior.
+
+The v0.3 release passes TypeScript, scoped ESLint and view checks, 293 domain tests and 24 native interaction/render tests. The isolated web preview also compiles. A controllable browser was unavailable during this release, so fresh screenshot inspection is unverified.
 
 CI also compiles native Android, verifies APK identity/signature and checks that the JavaScript bundle is embedded. Native runtime behavior still needs testing on a device: offline onboarding, workout completion/progression, force-stop/reopen persistence, background timers and notification actions, Health Connect permission flows, import/export, and folded/unfolded layouts.
 

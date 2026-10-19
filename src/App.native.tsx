@@ -135,6 +135,7 @@ import {
   Thunk_checkSetTimer,
   Thunk_startSetTimerWork,
   Thunk_refreshLiveActivity,
+  Thunk_restoreWorkout,
   Thunk_handleWatchStorageMerge,
   Thunk_postevent,
   Thunk_debugTestLogin,
@@ -152,12 +153,13 @@ import {
   PerfScorecard_setContextProvider,
 } from "./utils/perfScorecard";
 
-if (DevFitConfig.officialCloudEnabled)
+if (DevFitConfig.officialCloudEnabled) {
   GoogleSignin.configure({
     webClientId: "944666871420-p8kv124sgte8o0p6ev2ah6npudsl7e4f.apps.googleusercontent.com",
     iosClientId: "944666871420-of5rtcpja10vsp2jbe5m6amob7u5qvjq.apps.googleusercontent.com",
     offlineAccess: false,
   });
+}
 
 const watchAuthEvents: Record<IWatchAuthSource, { stale: string; readFail: string }> = {
   startup: { stale: "ls-keychain-stale-on-startup", readFail: "ls-keychain-get-auth-fail-startup" },
@@ -404,6 +406,10 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
     });
     return () => sub.remove();
   }, [dispatch, env]);
+
+  useEffect(() => {
+    dispatch(Thunk_restoreWorkout());
+  }, [dispatch]);
 
   useEffect(() => {
     const iap = env.iap;
@@ -664,7 +670,9 @@ export function App(): React.JSX.Element {
       const localStorage = await persistence.load(key, true);
       const hasUnreadableStorage = localStorage == null && (await persistence.hasStoredData(key));
       const url = new URL(`${__HOST__}/app/`);
-      if (!DevFitConfig.officialCloudEnabled) url.searchParams.set("nosync", "true");
+      if (!DevFitConfig.officialCloudEnabled) {
+        url.searchParams.set("nosync", "true");
+      }
       const deviceId = await DeviceId_get();
       const state = await getInitialState(fetch, { localStorage, url, deviceId, hasUnreadableStorage });
       Theme_apply(state.storage.settings.theme);
