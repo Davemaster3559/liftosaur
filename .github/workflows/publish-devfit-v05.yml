@@ -1,0 +1,62 @@
+name: Publish DevFit 0.5.0 release
+
+on:
+  push:
+    branches: [release/devfit-0.5.0]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-devfit-0.5.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_COMMIT: ca6b313d4e9677e60a8bf2fa8864bda0a08f98c6
+      EXPECTED_SHA256: 5bd91758f4b0cb6193c7230a5a8d41785a8855517caed6f6b2efd4081cea609e
+    steps:
+      - name: Download and verify the successful build
+        run: |
+          set -euo pipefail
+          test "$(gh run view 39935842968 --json headSha --jq .headSha)" = "$SOURCE_COMMIT"
+          test "$(gh run view 39935842968 --json conclusion --jq .conclusion)" = success
+          gh run download 39935842968 --name "DevFit-android-$SOURCE_COMMIT" --dir release
+          cd release
+          sha256sum --check SHA256SUMS.txt
+          test "$(sha256sum DevFit-android-ca6b313d.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          cp DevFit-android-ca6b313d.apk DevFit-0.5.0-arm64.apk
+          sha256sum DevFit-0.5.0-arm64.apk > SHA256SUMS.txt
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<'NOTES'
+          DevFit **0.5.0** for ARM64 Android. Download **DevFit-0.5.0-arm64.apk** from Assets below.
+
+          Back up JSON in the existing app, then install this APK over DevFit. The package (`com.devfit.app`), signing certificate and storage keys match v0.4.
+
+          - 3 PM America/Edmonton training dates and explicit overrides.
+          - Rest cues once and collapses at zero, with stale-action protection.
+          - Pounds-first lifting, secondary kg and earned 8/10/12/15 progression.
+          - Previewed, recoverable upgrade of the existing eleven-session program.
+          - Named cardio, direct mm:ss logging and clearer workout, Today and Progress screens.
+
+          The abdominal bench remains pending until identified in-app. Automatic circuit rest adjustments stay in-app. Physical Fold layout, earbuds/locked-screen delivery, upgrade retention and Health Connect still require device checks.
+
+          Source: [`ca6b313d`](https://github.com/Davemaster3559/liftosaur/commit/ca6b313d4e9677e60a8bf2fa8864bda0a08f98c6).
+          [Successful Android build](https://github.com/Davemaster3559/liftosaur/actions/runs/39935842968): 357 domain tests and 30 native interaction tests passed. CI verified package/version, cryptographic signature and embedded offline JavaScript. Native interaction tests use mocked bridges.
+
+          APK SHA-256: `5bd91758f4b0cb6193c7230a5a8d41785a8855517caed6f6b2efd4081cea609e`.
+          NOTES
+      - name: Upload the verified APK and publish
+        run: |
+          set -euo pipefail
+          gh release create v0.5.0 release/DevFit-0.5.0-arm64.apk release/SHA256SUMS.txt \
+            --target "$SOURCE_COMMIT" --title "DevFit 0.5.0" --notes-file release-notes.md --draft
+          gh release edit v0.5.0 --draft=false --latest
+
