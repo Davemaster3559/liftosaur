@@ -22,6 +22,9 @@ export type LiftosaurTimerStartParams = {
   ignoreDoNotDisturb: boolean;
   timerSinceMs: number;
   timerSeconds: number;
+  eventId?: string;
+  eventRevision?: number;
+  deadline?: number;
 };
 
 export type LiftosaurTimerFiredEvent = {
@@ -30,12 +33,12 @@ export type LiftosaurTimerFiredEvent = {
 
 export interface Spec extends TurboModule {
   startTimer(params: LiftosaurTimerStartParams): Promise<LiftosaurTimerStartResult>;
-  stopTimer(): Promise<void>;
+  stopTimer(eventId?: string, eventRevision?: number): Promise<void>;
 
   scheduleReminder(duration: number, title: string, body: string): Promise<LiftosaurTimerStartResult>;
   cancelReminder(): Promise<void>;
 
-  playSound(volume: number, vibration: boolean, sound: string): Promise<void>;
+  playSound(volume: number, vibration: boolean, sound: string, ignoreDoNotDisturb: boolean): Promise<void>;
 
   getNotificationPermission(): Promise<LiftosaurTimerPermissionStatus>;
   requestNotificationPermission(): Promise<LiftosaurTimerPermissionStatus>;

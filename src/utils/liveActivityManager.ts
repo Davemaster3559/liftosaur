@@ -16,7 +16,8 @@ import {
   ILiveActivityState,
 } from "./liveActivityState";
 import { INativeEffect } from "../models/nativeEffects";
-import { Subscriptions_hasSubscription } from "./subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
+import { History_isActivelyPaused, History_workoutTime } from "../models/history";
 import { UrlUtils_build } from "./url";
 
 declare const __HOST__: string;
@@ -143,7 +144,7 @@ export function LiveActivityManager_updateLiveActivity(
   settings: ISettings,
   subscription?: ISubscription
 ): void {
-  if (!subscription || !Subscriptions_hasSubscription(subscription)) {
+  if (!Capabilities_hasLocal("notifications") || History_isActivelyPaused(progress.intervals)) {
     return;
   }
   let liveActivityEntry = LiveActivityManager_getLiveActivityEntry(
@@ -199,7 +200,7 @@ export function LiveActivityManager_updateLiveActivity(
       ? progress.entries[progress.timerEntryIndex]?.sets[progress.timerSetIndex]
       : undefined;
   const attributes: ILiveActivityState = {
-    workoutStartTimestamp: progress.startTime,
+    workoutStartTimestamp: Date.now() - History_workoutTime(progress),
     historyEntryState: liveActivityEntry,
     setTimer: setTimerState,
     getReady: getReadyState,
@@ -209,6 +210,8 @@ export function LiveActivityManager_updateLiveActivity(
             restTimerSince: restTimerSince ?? progress.timerSince,
             restTimer: restTimer ?? progress.timer,
             isAuto: !!restingSet?.auto,
+            eventId: progress.devfitRestEvent?.id,
+            eventRevision: progress.devfitRestEvent?.revision,
           }
         : undefined,
     ignoreDoNotDisturb: !!settings.ignoreDoNotDisturb,
@@ -223,8 +226,12 @@ export function LiveActivityManager_updateLiveActivityForNextEntry(
   mode: "workout" | "warmup",
   programExercise: IPlannerProgramExercise | undefined,
   settings: ISettings,
-  subscription?: ISubscription
+  subscription?: ISubscription,
+  isPlayground: boolean = false
 ): void {
+  if (isPlayground) {
+    return;
+  }
   const currentEntry = progress.entries[entryIndex];
   if (!currentEntry) {
     return;

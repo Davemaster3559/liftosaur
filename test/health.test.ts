@@ -309,6 +309,8 @@ describe("Health", () => {
 
   it("HealthAndroidFilter: does not match foreign records", () => {
     expect(HealthAndroidFilter_isSelfOrigin({ metadata: { dataOrigin: "com.example.scale" } })).to.equal(false);
+    expect(HEALTH_ANDROID_PACKAGE_NAME).to.equal("com.devfit.app");
+    expect(HealthAndroidFilter_isSelfOrigin({ metadata: { dataOrigin: "com.liftosaur.www.twa" } })).to.equal(false);
   });
 
   it("HealthAndroidFilter: missing metadata is foreign", () => {
@@ -317,9 +319,9 @@ describe("Health", () => {
     expect(HealthAndroidFilter_isSelfOrigin(undefined)).to.equal(false);
   });
 
-  it("saveWorkoutToHealth: emits submit/storing/success postevents on success", async () => {
+  it("saveWorkoutToHealth: saves locally without uploading health telemetry", async () => {
     setIosPlatform();
-    const { mockReducer, mockFetch } = await SyncTestUtils_initTheApp("rn_ios_evt_ok");
+    const { mockReducer, mockFetch, healthAdapter } = await SyncTestUtils_initTheApp("rn_ios_evt_ok");
     await enableAppleHealth(mockReducer);
 
     await mockReducer.run([
@@ -331,18 +333,16 @@ describe("Health", () => {
       }),
     ]);
 
-    const events = postedEventNames(mockFetch);
-    expect(events).to.include("submit-workout-apple-health");
-    expect(events).to.include("storing-workout-to-apple-health");
-    expect(events).to.include("success-workout-apple-health");
-    expect(events).to.not.include("fail-workout-apple-health");
+    expect(healthAdapter.saveWorkoutCalls).to.have.length(1);
+    expect(healthAdapter.saveWorkoutCalls[0].calories).to.equal(250);
+    expect(postedEventNames(mockFetch)).to.eql([]);
   });
 
-  it("saveWorkoutToHealth: emits fail postevent on adapter rejection (android)", async () => {
+  it("saveWorkoutToHealth: handles adapter rejection without uploading health telemetry (android)", async () => {
     setAndroidPlatform();
     const { mockReducer, mockFetch, healthAdapter } = await SyncTestUtils_initTheApp("rn_and_evt_fail");
     await enableGoogleHealth(mockReducer);
-    sinon.stub(healthAdapter, "saveWorkout").rejects(new Error("permission denied"));
+    const saveWorkout = sandbox.stub(healthAdapter, "saveWorkout").rejects(new Error("permission denied"));
 
     await mockReducer.run([
       Thunk_saveWorkoutToHealth({
@@ -353,10 +353,8 @@ describe("Health", () => {
       }),
     ]);
 
-    const events = postedEventNames(mockFetch);
-    expect(events).to.include("submit-workout-google-health");
-    expect(events).to.include("fail-workout-google-health");
-    expect(events).to.not.include("success-workout-google-health");
+    expect(saveWorkout.calledOnce).to.equal(true);
+    expect(postedEventNames(mockFetch)).to.eql([]);
   });
 
   it("Thunk_requestHealthPermissions: invokes adapter requestPermissions", async () => {

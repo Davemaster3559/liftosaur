@@ -1,5 +1,5 @@
 import { JSX, memo, useMemo, useState } from "react";
-import { View } from "react-native";
+import { View, Pressable } from "react-native";
 import { TextInput } from "./primitives/textInput";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { Text } from "./primitives/text";
@@ -19,21 +19,21 @@ import {
 } from "../models/exercise";
 import { equipments, exerciseKinds, IExerciseType, IProgram, ISettings, IWeight } from "../types";
 import { CollectionUtils_uniqByExpr, CollectionUtils_compact } from "../utils/collection";
-import { StringUtils_capitalize } from "../utils/string";
+import { StringUtils_capitalize, StringUtils_dashcase } from "../utils/string";
 import { ExerciseImage } from "./exerciseImage";
 import { GroupHeader } from "./groupHeader";
-import { MenuItemWrapper } from "./menuItem";
 import { Multiselect } from "./multiselect";
 import { IHistoryRecord } from "../types";
 import { Weight_eqeq, Weight_print } from "../models/weight";
 import { IconArrowRight } from "./icons/iconArrowRight";
-import { LinkButton } from "./linkButton";
 import { ObjectUtils_values } from "../utils/object";
 import { Settings_activeCustomExercises } from "../models/settings";
 import { Program_evaluate, Program_getAllUsedProgramExercises } from "../models/program";
 import { Muscle_getAvailableMuscleGroups, Muscle_getMuscleGroupName } from "../models/muscle";
 import { navigateToModal } from "../navigation/navigationService";
 import { useProgressiveItems } from "../utils/useProgressiveItems";
+import { DevFitAction } from "../devfit/ui";
+import { Session_kind } from "../devfit/presentation";
 
 interface IExercisesListProps {
   dispatch: IDispatch;
@@ -65,6 +65,7 @@ function buildExercises(exerciseTypes: IExerciseType[], settings: ISettings): IE
 
 export function ExercisesList(props: IExercisesListProps): JSX.Element {
   const { settings, program, history, dispatch } = props;
+  const colors = Tailwind_semantic().devfit;
   const [filter, setFilter] = useState<string>("");
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
 
@@ -166,11 +167,13 @@ export function ExercisesList(props: IExercisesListProps): JSX.Element {
           data-testid="exercises-list-filter"
           testID="exercises-list-filter"
           className="px-4 py-2 mb-2 text-base border rounded-lg bg-background-default border-border-neutral text-text-primary"
+          style={{ minHeight: 52, backgroundColor: colors.surface, color: colors.ink, borderColor: colors.line }}
           defaultValue={filter}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Filter by name"
-          placeholderTextColor={Tailwind_semantic().text.secondarysubtle}
+          placeholder="Search your exercises"
+          accessibilityLabel="Search your exercises"
+          placeholderTextColor={colors.muted}
           onChangeText={(t) => setFilter(t)}
           returnKeyType="search"
         />
@@ -180,14 +183,22 @@ export function ExercisesList(props: IExercisesListProps): JSX.Element {
           placeholder="Filter by type"
           values={filterOptions}
           initialSelectedValues={new Set()}
+          inputStyle={{ minHeight: 52, backgroundColor: colors.surface, color: colors.ink, borderColor: colors.line }}
           onChange={(ft) => setFilterTypes(Array.from(ft))}
         />
       </View>
-      <View className="items-end">
-        <LinkButton name="create-custom-exercise" onClick={() => navigateToModal("customExerciseModal", {})}>
-          Create custom exercise
-        </LinkButton>
+      <View style={{ marginTop: 12 }}>
+        <DevFitAction
+          label="Create custom exercise"
+          secondary
+          onPress={() => navigateToModal("customExerciseModal", {})}
+        />
       </View>
+      {allExercises.length === 0 && (
+        <Text style={{ color: colors.muted, paddingVertical: 24 }}>
+          No matching exercises. Try another name or filter.
+        </Text>
+      )}
 
       {visibleCustom.length > 0 && <GroupHeader name="Custom Exercises" topPadding={true} />}
       {visibleCustom.map((exercise) => (
@@ -232,10 +243,25 @@ function areExerciseItemPropsEqual(prev: IExerciseItemProps, next: IExerciseItem
 }
 
 const ExerciseItem = memo(function ExerciseItem(props: IExerciseItemProps): JSX.Element {
+  const colors = Tailwind_semantic().devfit;
+  const kind = Session_kind(props.exercise.name);
+  const testId = `menu-item-${StringUtils_dashcase(props.exercise.name)}`;
   return (
-    <MenuItemWrapper
-      name={props.exercise.name}
-      onClick={() => {
+    <Pressable
+      testID={testId}
+      data-testid={testId}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${props.exercise.name} details`}
+      style={{
+        marginBottom: 10,
+        padding: 12,
+        minHeight: 88,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.line,
+        backgroundColor: colors.surface,
+      }}
+      onPress={() => {
         props.dispatch(Thunk_pushExerciseStatsScreen(props.exercise));
       }}
     >
@@ -243,36 +269,36 @@ const ExerciseItem = memo(function ExerciseItem(props: IExerciseItemProps): JSX.
         <View className="items-center justify-center">
           <View className="p-1 my-1 rounded-lg bg-background-image">
             <ExerciseImage
-              useTextForCustomExercise={true}
+              useTextForCustomExercise={false}
               settings={props.settings}
-              className="w-scaled-8"
+              width={36}
               exerciseType={props.exercise}
               size="small"
             />
           </View>
         </View>
         <View className="flex-1 py-2">
-          <Text className="text-base text-text-primary">{props.exercise.name}</Text>
-          <View className="flex-row text-xs text-text-secondary">
-            <Text className="mr-2 text-xs text-text-secondary">
-              <Text className="text-xs font-bold text-text-secondary">1RM:</Text> {Weight_print(props.exercise.rm1)},
+          <Text className="text-base font-semibold" style={{ color: colors.ink }}>
+            {props.exercise.name}
+          </Text>
+          <Text className="text-xs" style={{ color: colors.muted }}>
+            {props.exercise.equipmentName ??
+              (props.exercise.equipment ? equipmentName(props.exercise.equipment) : "Bodyweight / custom setup")}
+          </Text>
+          {kind !== "strength" ? (
+            <Text className="text-xs" style={{ color: colors.cardio }}>
+              {kind === "running" ? "Running" : "Cardio"} · Timed sessions
             </Text>
-            {props.exercise.equipmentName ? (
-              <Text className="text-xs text-text-secondary">
-                <Text className="text-xs font-bold text-text-secondary">Equipment:</Text> {props.exercise.equipmentName}
-              </Text>
-            ) : (
-              <Text className="text-xs text-text-secondary">
-                <Text className="text-xs font-bold text-text-secondary">Default rounding:</Text>{" "}
-                {props.exercise.defaultRounding}
-              </Text>
-            )}
-          </View>
+          ) : props.exercise.rm1.value > 0 ? (
+            <Text className="text-xs" style={{ color: colors.muted }}>
+              1RM setting · {Weight_print(props.exercise.rm1)}
+            </Text>
+          ) : null}
         </View>
         <View className="items-center py-2 pl-2">
           <IconArrowRight />
         </View>
       </View>
-    </MenuItemWrapper>
+    </Pressable>
   );
 }, areExerciseItemPropsEqual);

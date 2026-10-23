@@ -4,7 +4,7 @@ import { BlurView } from "@react-native-community/blur";
 import { Text } from "./primitives/text";
 import { Button } from "./button";
 import { IDispatch } from "../ducks/types";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal, ILocalCapability } from "../devfit/capabilities";
 import { Thunk_pushScreen } from "../ducks/thunks";
 import { ISubscription } from "../types";
 import { Tailwind_semantic, Tailwind_colors } from "../utils/tailwindConfig";
@@ -13,11 +13,12 @@ interface IProps {
   dispatch: IDispatch;
   subscription: ISubscription;
   topic: string;
+  capability: ILocalCapability;
   blur: number;
 }
 
 function LockerInner(props: IProps): JSX.Element {
-  const isSubscribed = Subscriptions_hasSubscription(props.subscription);
+  const isSubscribed = Capabilities_hasLocal(props.capability);
 
   if (isSubscribed) {
     return <></>;

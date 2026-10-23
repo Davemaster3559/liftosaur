@@ -1131,10 +1131,20 @@ const SearchInput = memo(function SearchInput(props: {
   );
 
   return (
-    <View className="flex-row items-center flex-1 gap-2 p-2 rounded-lg bg-background-neutral">
+    <View
+      className="flex-row items-center flex-1 gap-2 p-2 rounded-lg bg-background-neutral"
+      style={{
+        minHeight: 52,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: Tailwind_semantic().devfit.line,
+        backgroundColor: Tailwind_semantic().devfit.surface,
+      }}
+    >
       <IconMagnifyingGlass size={18} color={Tailwind_colors().lightgray[600]} />
       <TextInput
-        placeholder="Search by name"
+        placeholder="Find an exercise"
+        accessibilityLabel="Search exercises by name"
         placeholderTextColor={Tailwind_semantic().text.secondarysubtle}
         className="flex-1 text-sm text-text-secondary"
         style={{ paddingVertical: 0, includeFontPadding: false }}
@@ -1172,6 +1182,9 @@ const SearchAndFilter = memo(function SearchAndFilter(props: ISearchAndFilterPro
       <View className="flex-row items-center gap-2 mx-4">
         <SearchInput dispatch={dispatch} search={search} />
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Filter by muscles, equipment and favorites"
+          style={{ minWidth: 52, minHeight: 52, justifyContent: "center" }}
           className={`flex-row items-center gap-1 py-1 border rounded-lg ${
             isFiltered ? "border-button-secondarystroke px-2" : "px-4 border-border-neutral"
           }`}

@@ -16,7 +16,7 @@ import {
 } from "../models/weight";
 import { IconBarbellSide } from "./icons/iconBarbellSide";
 import { Tailwind_colors } from "../utils/tailwindConfig";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { Equipment_getUnitOrDefaultForExerciseType } from "../models/equipment";
 
 interface IInputWeight2Props {
@@ -140,9 +140,8 @@ function InputWeight2Inner(props: IInputWeight2Props): JSX.Element {
   }, []);
 
   const showPlates =
-    props.subscription &&
     props.exerciseType &&
-    Subscriptions_hasSubscription(props.subscription) &&
+    Capabilities_hasLocal("plates") &&
     evaluatedWeight &&
     Weight_is(evaluatedWeight);
 

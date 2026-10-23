@@ -1,4 +1,19 @@
 {
+  "devfit": {
+    "canvas": { "light": "#F4F5F9", "dark": "#090B10" },
+    "surface": { "light": "#FFFFFF", "dark": "#151923" },
+    "raised": { "light": "#EAEDF5", "dark": "#202635" },
+    "line": { "light": "#D9DFEB", "dark": "#30394B" },
+    "ink": { "light": "#171B2B", "dark": "#F5F6FA" },
+    "muted": { "light": "#566078", "dark": "#B0B9CF" },
+    "accent": { "light": "#6240BB", "dark": "#C1ADFF" },
+    "accentsoft": { "light": "#EEE8FF", "dark": "#2D2447" },
+    "success": { "light": "#326818", "dark": "#C7F36C" },
+    "successsoft": { "light": "#EBF5DC", "dark": "#253321" },
+    "cardio": { "light": "#11657D", "dark": "#79D8F0" },
+    "cardiosoft": { "light": "#E0F3F8", "dark": "#15313C" },
+    "onaccent": { "light": "#FFFFFF", "dark": "#211639" }
+  },
   "color": {
     "red50": { "light": "@colors.red.50", "dark": "@colors.redgray.950" },
     "green50": { "light": "@colors.green.50", "dark": "@colors.greengray.950" },

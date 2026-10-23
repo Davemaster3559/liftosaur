@@ -16,6 +16,7 @@ interface IWorkoutFinishButtonProps {
   isCurrent: boolean;
   settings: ISettings;
   dispatch: IDispatch;
+  prominent?: boolean;
 }
 
 function WorkoutFinishButtonInner(props: IWorkoutFinishButtonProps): JSX.Element {
@@ -25,7 +26,8 @@ function WorkoutFinishButtonInner(props: IWorkoutFinishButtonProps): JSX.Element
     <Button
       name={isCurrent ? "finish-workout" : "save-history-record"}
       kind="purple"
-      buttonSize="md"
+      buttonSize={props.prominent ? "lg" : "md"}
+      style={props.prominent ? { minHeight: 52 } : undefined}
       disabled={isFinishing}
       data-testid="finish-workout"
       testID="finish-workout"
@@ -53,7 +55,11 @@ function WorkoutFinishButtonInner(props: IWorkoutFinishButtonProps): JSX.Element
           <IconSpinner width={20} height={20} color={Tailwind_colors().white} />
         </View>
       ) : isCurrent ? (
-        "Finish"
+        props.prominent ? (
+          "Finish workout"
+        ) : (
+          "Finish"
+        )
       ) : (
         "Save"
       )}

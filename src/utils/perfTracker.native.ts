@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import { PerfTrackerStore_create, PerfTrackerStore_generateSessionId } from "./perfTrackerStore";
 import type { IPerfEvent, IPerfFrameWindow, IPerfRecentAction } from "./perfTracker";
 import { PerfEnabled_tier2 } from "./perfEnabled";
+import { DevFitConfig } from "../devfit/config";
 
 export type { IPerfEvent, IPerfFrameWindow, IPerfRecentAction };
 
@@ -29,6 +30,7 @@ function scheduleFlush(): void {
 }
 
 async function flushNow(): Promise<void> {
+  if (!DevFitConfig.telemetryEnabled) return;
   const batch = store.drainPending();
   if (batch.length === 0) {
     return;
@@ -71,7 +73,7 @@ export function PerfTracker_mark(_name: string, _screen?: string): void {
 }
 
 export function PerfTracker_recordEvent(event: IPerfEvent): void {
-  if (!PerfEnabled_tier2()) {
+  if (!DevFitConfig.telemetryEnabled || !PerfEnabled_tier2()) {
     return;
   }
   ensureSessionStart();

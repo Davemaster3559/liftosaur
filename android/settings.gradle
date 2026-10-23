@@ -5,6 +5,6 @@ plugins {
   id("com.facebook.react.settings")
 }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
-rootProject.name = 'com.liftosaur.www.twa'
+rootProject.name = 'com.devfit.app'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')

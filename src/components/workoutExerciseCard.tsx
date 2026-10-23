@@ -35,7 +35,7 @@ import { WorkoutHints_recordUseInState } from "../utils/workoutHintsDispatch";
 import { IWorkoutExerciseSetsExpansion } from "./workoutExerciseAllSets";
 import { CollectionUtils_removeAt } from "../utils/collection";
 import { IconCog2 } from "./icons/iconCog2";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { Thunk_pushExerciseStatsScreen, Thunk_pushToEditProgramExercise } from "../ducks/thunks";
 import { WorkoutExerciseAllSets } from "./workoutExerciseAllSets";
 import {
@@ -68,6 +68,7 @@ import { navigateToModal } from "../navigation/navigationService";
 import { Dialog_confirm } from "../utils/dialog";
 import { usePerfRenderCount } from "../utils/usePerfRenderCount";
 import { usePerfWhyRender } from "../utils/usePerfWhyRender";
+import { DevFitProgressionCue } from "../devfit/progressionCue";
 
 interface IWorkoutExerciseCardProps {
   entry: IHistoryEntry;
@@ -337,7 +338,7 @@ function WorkoutExerciseCardInner(props: IWorkoutExerciseCardProps): JSX.Element
         .p("workoutSettings")
         .p("targetType")
         .recordModify((type) =>
-          Settings_getNextTargetType(type, !Subscriptions_hasSubscription(subscription) || !currentEquipmentName)
+          Settings_getNextTargetType(type, !Capabilities_hasLocal("plates") || !currentEquipmentName)
         ),
       "Change target type"
     );
@@ -576,6 +577,8 @@ function WorkoutExerciseCardInner(props: IWorkoutExerciseCardProps): JSX.Element
           </View>
         )}
       </View>
+      {props.isCurrentProgress && <DevFitProgressionCue entry={entry} previous={lastHistoryEntry}
+        exercise={programExercise} unit={settings.units} onViewRule={programExercise ? onKebabEdit : undefined} />}
       <View className="mt-2">
         <WorkoutExerciseAllSets
           stats={props.stats}

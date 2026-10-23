@@ -74,7 +74,7 @@ export function TimedSet_open(
           nonce: opts.nonce,
         },
       }
-    : { setTimer: { ...identity, startedAt: opts.startedAt, nonce: opts.nonce } };
+    : { setTimer: { ...identity, startedAt: opts.startedAt, performedAt: opts.startedAt, nonce: opts.nonce } };
 }
 
 export function TimedSet_toView(

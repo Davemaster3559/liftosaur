@@ -13,6 +13,7 @@ import {
   Exercise_synergistMuscles,
 } from "./exercise";
 import { Progress_getEntryId, Progress_isCurrent } from "./progress";
+import { Cardio_historyDate } from "../devfit/cardio";
 import { CollectionUtils_sort, CollectionUtils_sortByExpr } from "../utils/collection";
 
 import {
@@ -728,8 +729,7 @@ export function History_getHistoryRecordsForTimerange(
     if (Progress_isCurrent(hr)) {
       return false;
     }
-    const recordDate = Date.parse(hr.date);
-    const startTime = new Date(recordDate);
+    const startTime = Cardio_historyDate(hr);
     return startTime >= start && startTime < end;
   });
 }
@@ -1021,6 +1021,25 @@ export function History_isPaused(intervals?: IIntervals): boolean {
   return intervals ? intervals.length === 0 || intervals[intervals.length - 1][1] != null : false;
 }
 
+export function History_isActivelyPaused(intervals?: IIntervals): boolean {
+  return !!intervals && intervals.length > 0 && intervals[intervals.length - 1][1] != null;
+}
+
+export function History_pauseTime(intervals?: IIntervals): number | undefined {
+  return History_isActivelyPaused(intervals) ? intervals![intervals!.length - 1][1]! : undefined;
+}
+
+export function History_clockNow(progress: Pick<IHistoryRecord, "intervals">, now = Date.now()): number {
+  return History_pauseTime(progress.intervals) ?? now;
+}
+
+export function History_isNotStarted(progress: Pick<IHistoryRecord, "intervals" | "entries">): boolean {
+  return (
+    progress.intervals?.length === 0 &&
+    !progress.entries.some((e) => e.sets.some((s) => s.isCompleted) || e.warmupSets.some((s) => s.isCompleted))
+  );
+}
+
 export function History_resumeWorkout(
   effects: INativeEffect[],
   historyRecord: IHistoryRecord,
@@ -1054,7 +1073,7 @@ export function History_workoutTime(
 export const History_getDateToHistory = memoize(
   (history: IHistoryRecord[]): Partial<Record<string, IHistoryRecord>> => {
     return history.reduce<Partial<Record<string, IHistoryRecord>>>((memo, hr) => {
-      memo[DateUtils_formatYYYYMMDD(hr.date)] = hr;
+      memo[DateUtils_formatYYYYMMDD(Cardio_historyDate(hr))] = hr;
       return memo;
     }, {});
   },
@@ -1152,7 +1171,10 @@ function buildHomeWeekData(history: IHistoryRecord[], startWeekFromMonday: boole
   const firstDayOfWeekToHistoryRecord: Partial<Record<number, IHistoryRecord>> = {};
   for (const record of history) {
     if (!Progress_isCurrent(record)) {
-      const firstDayOfWeek = DateUtils_firstDayOfWeekTimestamp(record.endTime ?? record.startTime, startWeekFromMonday);
+      const firstDayOfWeek = DateUtils_firstDayOfWeekTimestamp(
+        record.source === "devfit_manual" ? Cardio_historyDate(record).getTime() : (record.endTime ?? record.startTime),
+        startWeekFromMonday
+      );
       if (firstDayOfWeekToHistoryRecord[firstDayOfWeek] == null) {
         firstDayOfWeekToHistoryRecord[firstDayOfWeek] = record;
       }

@@ -129,7 +129,7 @@ export const ExerciseImage = memo(function ExerciseImage(props: IProps): JSX.Ele
       </>
     );
   } else {
-    return doesExist ? (
+    return doesExist && !isError ? (
       <>
         <Image
           data-testid="exercise-image-large"
@@ -152,7 +152,8 @@ export const ExerciseImage = memo(function ExerciseImage(props: IProps): JSX.Ele
       </>
     ) : (
       <ExerciseNoImage size={props.size}>
-        <Text>No exercise image</Text>
+        <IconDefaultExercise size={48} />
+        <Text className="text-sm text-text-secondary">Exercise image unavailable</Text>
       </ExerciseNoImage>
     );
   }
@@ -166,7 +167,8 @@ function ExerciseImageAuxiliary(props: {
   if (props.isError) {
     return (
       <ExerciseNoImage size={props.size}>
-        <Text className="text-xs leading-normal text-center text-red-700">Error fetching the exercise image</Text>
+        <IconDefaultExercise size={48} />
+        <Text className="text-sm text-center text-text-secondary">Exercise image unavailable</Text>
       </ExerciseNoImage>
     );
   } else if (props.isLoading) {

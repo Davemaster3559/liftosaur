@@ -6,7 +6,7 @@ import { ModalScreenContainer } from "../ModalScreenContainer";
 import { FormSheet } from "../FormSheet";
 import { MusclesView } from "../../components/muscles/musclesView";
 import { Locker } from "../../components/locker";
-import { Subscriptions_hasSubscription } from "../../utils/subscriptions";
+import { Capabilities_hasLocal } from "../../devfit/capabilities";
 import { Program_evaluate, Program_getProgramDay } from "../../models/program";
 import {
   IPoints,
@@ -61,7 +61,7 @@ export function NavModalProgramPreviewMuscles(): JSX.Element {
   const title =
     params.type === "program" ? `Muscles for program '${evaluatedProgram.name}'` : `Muscles for day '${name}'`;
 
-  const isLocked = !Subscriptions_hasSubscription(subscription);
+  const isLocked = !Capabilities_hasLocal("muscles");
 
   return (
     <ModalScreenContainer onClose={() => navigation.goBack()} shouldShowClose={true} overflowHidden isFullHeight>
@@ -71,7 +71,7 @@ export function NavModalProgramPreviewMuscles(): JSX.Element {
         header={<Text className="px-gutter pt-4 pb-2 text-xl font-bold text-center">{title}</Text>}
       >
         <MusclesView settings={settings} points={points} title={evaluatedProgram.name} />
-        {isLocked && <Locker topic="Muscles" dispatch={dispatch} blur={8} subscription={subscription} />}
+        {isLocked && <Locker capability="muscles" topic="Muscles" dispatch={dispatch} blur={8} subscription={subscription} />}
       </FormSheet>
     </ModalScreenContainer>
   );

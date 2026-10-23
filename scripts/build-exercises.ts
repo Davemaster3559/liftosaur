@@ -76,7 +76,7 @@ for (const file of files) {
   entries.push({ key, content: mainContent, video, description, howto });
 }
 
-const escaped = (str: string): string => str.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+const escaped = (str: string): string => JSON.stringify(str.replace(/\r\n/g, "\n")).slice(1, -1);
 
 let ts = `// Auto-generated from exercises/*.md\n// Do not edit manually - run scripts/build-exercises.ts to update\n\nexport interface IExerciseHowToStep {\n  name: string;\n  text: string;\n}\n\nexport const exerciseDescriptions: Record<string, { content: string; video: string; description: string; howto: IExerciseHowToStep[] }> = {\n`;
 for (const { key, content, video, description, howto } of entries) {

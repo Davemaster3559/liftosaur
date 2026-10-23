@@ -4769,6 +4769,18 @@ export const exerciseDescriptions: Record<
       },
     ],
   },
+  othercardio_leveragemachine: {
+    content:
+      "## Starting Position\n\n1. Name the activity and follow the equipment's instructions when applicable.\n\n## Movement\n\n1. Record the duration you actually performed.\n\n## Key Points\n\n- Leave unknown measurements blank. No lifting repetitions or strength load are counted.",
+    video: "",
+    description: "A named time-based cardio activity with optional actual measurements and notes.",
+    howto: [
+      {
+        name: "Record the Activity",
+        text: "Enter actual duration and an activity name. Add notes and perceived effort if useful.",
+      },
+    ],
+  },
   overheadpress_barbell: {
     content:
       "### Setup\n1. **Starting Position**: Stand with your feet shoulder-width apart. Grip the barbell with both hands slightly wider than shoulder-width.\n2. **Bar Position**: Rest the barbell on your upper chest, just below your chin, with your elbows positioned slightly in front of the bar.\n\n### Execution\n1. **Engage Core**: Tighten your core to stabilize your spine.\n2. **Press**: Push the barbell overhead while keeping your wrists straight and elbows in line with your wrists.\n3. **Full Extension**: Extend your arms fully without locking the elbows at the top. Your arms should be in line with your ears.\n4. **Controlled Descent**: Lower the barbell back to the starting position without leaning back excessively or hunching your shoulders. \n\n### Tips\n- **Head Position**: Tuck your chin slightly to allow the bar to travel straight up.\n- **Spine Alignment**: Maintain a neutral spine throughout the movement.\n- **Foot Placement**: Keep your feet planted and balanced to avoid swaying.\n\n### Common Mistakes\n- **Arching Back**: Avoid excessive arching; keep your hips and core engaged.\n- **Wrist Position**: Keep wrists straight, not bent back.\n- **Inadequate Range of Motion**: Ensure full extension and a complete downward motion.\n\nUse this guide to ensure safe and effective execution of the Barbell Overhead Press.",
@@ -7913,6 +7925,18 @@ export const exerciseDescriptions: Record<
       {
         name: "Lower and Repeat",
         text: "Release the band back to the starting position as you descend into the next squat. Maintain a neutral spine and control the movement throughout each rep.",
+      },
+    ],
+  },
+  stairclimber_leveragemachine: {
+    content:
+      "## Starting Position\n\n1. Follow the machine's instructions and begin at an easy level.\n2. Stand upright with your feet supported on the steps. Use the rails for balance.\n\n## Movement\n\n1. Step at a controlled pace that allows stable footing.\n2. Reduce the level before stepping off. Use the machine's stop control.\n\n## Key Points\n\n- Record elapsed duration and machine steps when known. Resistance levels belong to that machine.\n- No lifting load, repetitions or strength PR is assigned to this activity.",
+    video: "",
+    description: "Time-based stair climbing with optional machine levels, climbing steps and effort.",
+    howto: [
+      {
+        name: "Record the Activity",
+        text: "Record actual duration. Machine level, steps per minute and time at each setting are optional.",
       },
     ],
   },

@@ -18,10 +18,22 @@ import { FallbackScreen } from "../../components/fallbackScreen";
 import { Thunk_pullScreen } from "../../ducks/thunks";
 import { useAppContext } from "../../components/appContext";
 import { usePlaygroundModalBridges } from "../usePlaygroundModalBridges";
+import { DevFitSchedule } from "../../devfit/scheduleScreen";
 
 export function NavScreenPrograms(): JSX.Element {
   const { state, dispatch } = useAppState();
   const navCommon = buildNavCommon(state);
+  const currentProgram = Program_getProgram(state, state.storage.currentProgramId);
+  if (currentProgram)
+    return (
+      <DevFitSchedule
+        program={currentProgram}
+        history={state.storage.history}
+        settings={state.storage.settings}
+        dispatch={dispatch}
+        isOngoing={Progress_getCurrentProgress(state) != null}
+      />
+    );
   return (
     <View className="flex-1 bg-background-default">
       <ChooseProgramView

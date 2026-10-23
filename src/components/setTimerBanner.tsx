@@ -14,11 +14,21 @@ import {
   Thunk_checkSetTimer,
   Thunk_playGetReadyCue,
   Thunk_startSetTimerWork,
+  Thunk_pauseWorkout,
 } from "../ducks/thunks";
 import { Progress_isSetTimerCheckDue, IActiveSetTimer } from "../models/progress";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { IByExercise } from "../pages/planner/plannerEvaluator";
 import { IPlannerProgramExercise } from "../pages/planner/models/types";
+import { Session_exerciseKind, Session_timedRecordingSet, Session_switchPhase } from "../devfit/presentation";
+import { DevFitCardioTimer } from "../devfit/cardioTimer";
+import { DevFitWorkoutClock } from "../devfit/workoutClock";
+import { History_clockNow, History_isActivelyPaused } from "../models/history";
+import { DevFitAction } from "../devfit/ui";
+import { lb } from "lens-shmens";
+import { updateProgress } from "../models/state";
+import { Cardio_phaseSetting } from "../devfit/cardio";
+import { CardioActions_phase } from "../devfit/cardioActions";
 
 // Re-renders the clock every 250ms and calls onTick so `auto` circuits advance/complete on time. All the
 // advance/complete/rest logic lives in the model (Progress_checkSetTimer) — this just provides the clock tick.
@@ -59,8 +69,29 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
   const isGetReady = setTimerModal.phase === "getReady";
   const entry = progress.entries[entryIndex];
   const set = entry?.sets[setIndex];
+  const paused = History_isActivelyPaused(progress.intervals);
+  useEffect(() => {
+    if (
+      !isPlayground &&
+      set &&
+      entry.sets.length === 1 &&
+      !isGetReady &&
+      Session_exerciseKind(props.programExercise, entry, settings) === "running"
+    ) {
+      dispatch(
+        CardioActions_phase({
+          entryIndex,
+          setIndex,
+          phaseId: setTimerModal.id,
+          setId: set.id,
+          expectedPhase: "walk",
+          kind: "begin",
+        })
+      );
+    }
+  }, [isGetReady, set?.id, startedAt]);
 
-  useSetTimerTick(set != null, () => {
+  useSetTimerTick(set != null && !paused, () => {
     if (isPlayground) {
       // The thunk gates on this internally; the playground dispatches the card action directly, so gate here
       // too — otherwise every 250ms tick writes playground state even when no transition is due.
@@ -77,16 +108,17 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
     }
   });
 
+  const effectiveNow = History_clockNow(progress);
   const target = set?.setTimer ?? 0;
-  const elapsedMs = isGetReady ? 0 : Math.max(0, Date.now() - startedAt);
+  const elapsedMs = isGetReady ? 0 : Math.max(0, effectiveNow - startedAt);
   const getReadyTotal = setTimerModal.phase === "getReady" ? setTimerModal.getReady : 0;
   const getReadyLeft = isGetReady
-    ? Math.max(0, Math.ceil((getReadyTotal * 1000 - (Date.now() - startedAt)) / 1000))
+    ? Math.max(0, Math.ceil((getReadyTotal * 1000 - (effectiveNow - startedAt)) / 1000))
     : 0;
 
   const lastCueRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (!isGetReady || isPlayground) {
+    if (!isGetReady || isPlayground || paused) {
       lastCueRef.current = undefined;
       return;
     }
@@ -94,7 +126,7 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
       lastCueRef.current = getReadyLeft;
       dispatch(Thunk_playGetReadyCue());
     }
-  }, [isGetReady, isPlayground, getReadyLeft, dispatch]);
+  }, [isGetReady, isPlayground, getReadyLeft, dispatch, paused]);
 
   // For a timed AMRAP set the amrap modal stacks on top while this modal stays mounted underneath (see
   // Progress_proceedAfterTimedSet). Hide the clock so it isn't visible behind the amrap sheet.
@@ -106,6 +138,21 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
   const elapsedLabel = TimeUtils_formatMMSS(elapsedMs);
 
   function recordSetTimer(keepTiming: boolean): void {
+    if (paused) {
+      return;
+    }
+    const recordingSet = Session_timedRecordingSet(
+      set!,
+      Session_exerciseKind(props.programExercise, entry, settings),
+      settings
+    );
+    if (recordingSet !== set) {
+      updateProgress(
+        dispatch,
+        lb<IHistoryRecord>().p("entries").i(entryIndex).p("sets").i(setIndex).record(recordingSet),
+        "Record cardio time"
+      );
+    }
     if (isPlayground) {
       dispatch({
         type: "CompleteSetAction",
@@ -138,11 +185,123 @@ export function SetTimerBannerContent(props: ISetTimerBannerContentProps): JSX.E
   const stopLabel = recordedThisSide && isLeft ? "Next side" : `Stop & record · ${elapsedLabel}`;
 
   function onStartNow(): void {
+    if (paused) {
+      return;
+    }
     if (isPlayground) {
       dispatch({ type: "StartSetTimerWorkAction" });
     } else {
       dispatch(Thunk_startSetTimerWork());
     }
+  }
+
+  const sessionKind = Session_exerciseKind(props.programExercise, entry, settings);
+  const onResume = (): void => {
+    dispatch({ type: "ResumeWorkoutAction", isPlayground: !!isPlayground, hasSubscription: false });
+  };
+  if (sessionKind === "running" || sessionKind === "cardio") {
+    return (
+      <View style={{ gap: 12 }}>
+        {!isPlayground && progress.id === 0 && (
+          <DevFitWorkoutClock
+            progress={progress}
+            onPauseResume={() => (paused ? onResume() : dispatch(Thunk_pauseWorkout()))}
+          />
+        )}
+        <DevFitCardioTimer
+          entry={entry}
+          exercise={props.programExercise}
+          settings={settings}
+          setIndex={setIndex}
+          elapsedSeconds={elapsedMs / 1000}
+          target={target}
+          readySeconds={isGetReady ? getReadyLeft : undefined}
+          sideLabel={sideLabel}
+          completed={isCompleted}
+          nextSide={isLeft && recordedThisSide}
+          paused={paused}
+          onResume={onResume}
+          onBeginPhase={(initialPhase) =>
+            dispatch(
+              CardioActions_phase({
+                entryIndex,
+                setIndex,
+                phaseId: setTimerModal.id,
+                setId: set.id,
+                expectedPhase: "walk",
+                kind: "begin",
+                initialPhase,
+              })
+            )
+          }
+          onPhaseSettings={(value) => {
+            if (!isPlayground) {
+              dispatch(
+                CardioActions_phase({
+                  entryIndex,
+                  setIndex,
+                  phaseId: setTimerModal.id,
+                  setId: set.id,
+                  expectedPhase: set.cardioLaps?.slice(-1)[0]?.phase ?? "walk",
+                  kind: "settings",
+                  value,
+                })
+              );
+            } else {
+              updateProgress(
+                dispatch,
+                lb<IHistoryRecord>()
+                  .p("entries")
+                  .i(entryIndex)
+                  .p("sets")
+                  .i(setIndex)
+                  .recordModify((s) => Cardio_phaseSetting(s, elapsedMs / 1000, value)),
+                "Record actual phase settings"
+              );
+            }
+          }}
+          onSwitchPhase={() => {
+            if (!isPlayground) {
+              dispatch(
+                CardioActions_phase({
+                  entryIndex,
+                  setIndex,
+                  phaseId: setTimerModal.id,
+                  setId: set.id,
+                  expectedPhase: set.cardioLaps?.slice(-1)[0]?.phase ?? "walk",
+                  kind: "switch",
+                })
+              );
+            } else {
+              updateProgress(
+                dispatch,
+                lb<IHistoryRecord>()
+                  .p("entries")
+                  .i(entryIndex)
+                  .p("sets")
+                  .i(setIndex)
+                  .recordModify((s) => Session_switchPhase(s, elapsedMs / 1000)),
+                "Switch running phase"
+              );
+            }
+          }}
+          onStart={onStartNow}
+          onRecord={onStopAndRecord}
+          onKeepTiming={onLogKeepTiming}
+          onClose={onClose}
+        />
+      </View>
+    );
+  }
+
+  if (paused) {
+    return (
+      <View style={{ padding: 24, gap: 16 }}>
+        <Text className="text-xl font-bold">Workout paused</Text>
+        <Text>All workout, rest and set clocks are frozen.</Text>
+        <DevFitAction label="Resume workout" onPress={onResume} />
+      </View>
+    );
   }
 
   if (isGetReady) {

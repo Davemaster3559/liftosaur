@@ -671,6 +671,15 @@ export const allExercisesList: Record<IExerciseId, IExercise> = {
     startingWeightLb: { value: 30, unit: "lb" },
     startingWeightKg: { value: 12.5, unit: "kg" },
   },
+  inclineTreadmillWalk: {
+    id: "inclineTreadmillWalk",
+    name: "Incline Treadmill Walk",
+    defaultWarmup: 10,
+    defaultEquipment: "leverageMachine",
+    types: ["lower", "legs"],
+    startingWeightLb: { value: 0, unit: "lb" },
+    startingWeightKg: { value: 0, unit: "kg" },
+  },
   invertedRow: {
     id: "invertedRow",
     name: "Inverted Row",
@@ -1453,6 +1462,33 @@ export const allExercisesList: Record<IExerciseId, IExercise> = {
     types: ["lower", "legs"],
     startingWeightLb: { value: 35, unit: "lb" },
     startingWeightKg: { value: 15, unit: "kg" },
+  },
+  stairClimber: {
+    id: "stairClimber",
+    name: "Stair Climber",
+    defaultWarmup: 0,
+    defaultEquipment: "leverageMachine",
+    types: [],
+    startingWeightLb: { value: 0, unit: "lb" },
+    startingWeightKg: { value: 0, unit: "kg" },
+  },
+  otherCardio: {
+    id: "otherCardio",
+    name: "Other Cardio",
+    defaultWarmup: 0,
+    defaultEquipment: "leverageMachine",
+    types: [],
+    startingWeightLb: { value: 0, unit: "lb" },
+    startingWeightKg: { value: 0, unit: "kg" },
+  },
+  stationaryBike: {
+    id: "stationaryBike",
+    name: "Stationary Bike",
+    defaultWarmup: 10,
+    defaultEquipment: "leverageMachine",
+    types: ["lower", "legs"],
+    startingWeightLb: { value: 0, unit: "lb" },
+    startingWeightKg: { value: 0, unit: "kg" },
   },
   standingRow: {
     id: "standingRow",
@@ -2697,6 +2733,12 @@ export const metadata: Record<IExerciseId, IMetaExercises> = {
     bodyParts: ["Back"],
     sortedEquipment: ["barbell", "bodyweight", "dumbbell"],
   },
+  inclineTreadmillWalk: {
+    targetMuscles: [],
+    synergistMuscles: ["Quadriceps", "Hamstrings", "Gluteus Maximus", "Gastrocnemius", "Soleus"],
+    bodyParts: ["Hips", "Thighs", "Calves"],
+    sortedEquipment: ["leverageMachine", "bodyweight"],
+  },
   invertedRow: {
     targetMuscles: ["Latissimus Dorsi", "Trapezius Lower Fibers", "Trapezius Middle Fibers"],
     synergistMuscles: [
@@ -3551,6 +3593,14 @@ export const metadata: Record<IExerciseId, IMetaExercises> = {
     synergistMuscles: ["Soleus"],
     bodyParts: ["Calves"],
     sortedEquipment: ["barbell", "dumbbell", "leverageMachine", "bodyweight", "cable"],
+  },
+  stairClimber: { targetMuscles: [], synergistMuscles: [], sortedEquipment: ["leverageMachine"], bodyParts: [] },
+  otherCardio: { targetMuscles: [], synergistMuscles: [], sortedEquipment: ["leverageMachine"], bodyParts: [] },
+  stationaryBike: {
+    targetMuscles: [],
+    synergistMuscles: ["Quadriceps", "Hamstrings", "Gluteus Maximus", "Gastrocnemius", "Soleus"],
+    bodyParts: ["Hips", "Thighs", "Calves"],
+    sortedEquipment: ["leverageMachine", "bodyweight"],
   },
   standingRow: {
     targetMuscles: ["Latissimus Dorsi", "Trapezius Lower Fibers", "Trapezius Middle Fibers"],
@@ -5150,7 +5200,10 @@ export function Exercise_applyCustomExerciseChange(
     .p("notes")
     .set({ ...settings, exercises }, notes);
   if (program && oldExercise && oldExercise.name !== exercise.name) {
-    return { settings: newSettings, program: Program_changeExerciseName(oldExercise.name, exercise.name, program, newSettings) };
+    return {
+      settings: newSettings,
+      program: Program_changeExerciseName(oldExercise.name, exercise.name, program, newSettings),
+    };
   }
   return { settings: newSettings };
 }

@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { memo, useCallback, useMemo } from "react";
 import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { useExpandedRowRegistration, useRefocusAfterKeyboardComplete } from "./workoutCenterExpandedRow";
@@ -32,7 +32,8 @@ import { EditProgressEntry_showEditSetModal } from "../models/editProgressEntry"
 import { useTrackClick } from "../utils/clickTracking";
 import { Reps_enforceCompletedSet } from "../models/set";
 import { Weight_eq } from "../models/weight";
-import { Exercise_getIsUnilateral } from "../models/exercise";
+import { Exercise_get, Exercise_getIsUnilateral } from "../models/exercise";
+import { Session_kind, Session_timedRecordingSet } from "../devfit/presentation";
 import { FocusedInputFlush_flush } from "../utils/focusedInputFlush";
 import { IWorkoutSetPreviousLine } from "../utils/workoutSetPrevious";
 import { IWorkoutSetPlatesLine, WorkoutSetPlates_line } from "../utils/workoutSetPlates";
@@ -42,6 +43,7 @@ import { WorkoutExerciseSetCompact } from "./workoutExerciseSetCompact";
 import { WorkoutExerciseSetExpanded } from "./workoutExerciseSetExpanded";
 import { SetCompleteHaptic_play } from "../utils/setCompleteHaptic";
 import ReactNativeHapticFeedback from "react-native-haptic-feedback";
+import { getNavigationService } from "../navigation/navUtils";
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: false, ignoreAndroidSystemSettings: false };
 
@@ -92,6 +94,9 @@ export function computeSetColumnWidths(remValue: number, isUnilateral: boolean, 
 }
 
 interface IWorkoutExerciseSet {
+  progressId?: number;
+  renderBody?: (props: IWorkoutExerciseSetBodyProps) => ReactNode;
+  preserveRest?: boolean;
   exerciseType: IExerciseType;
   day: number;
   type: IProgressMode;
@@ -119,6 +124,7 @@ interface IWorkoutExerciseSet {
 
 export interface IWorkoutExerciseSetBodyProps {
   set: ISet;
+  preserveRest?: boolean;
   type: IProgressMode;
   setType: IWorkoutSetType;
   setIndex: number;
@@ -147,6 +153,7 @@ export interface IWorkoutExerciseSetBodyProps {
   onCompleteSet: () => void;
   onEditSetTimer?: () => void;
   onOpenRoundingInfo: () => void;
+  onWeightSetup: () => void;
   onToggleExpand?: () => void;
   onEditTarget?: () => void;
   onLongPressSet?: () => void;
@@ -258,9 +265,21 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     [dispatch, lbSet]
   );
   const refocus = useRefocusAfterKeyboardComplete();
+  const sessionKind = Session_kind(programExercise?.name ?? Exercise_get(exerciseType, settings.exercises).name, [
+    programExercise?.label ?? "",
+  ]);
   const onCompleteSet = useCallback(() => {
     FocusedInputFlush_flush();
     refocus();
+    if (set.setTimer != null && !set.isCompleted && (sessionKind === "running" || sessionKind === "cardio")) {
+      // Prepare the entire interval sequence before the clock opens. The native
+      // notification and auto-advance paths then use the same neutral values.
+      updateProgress(
+        dispatch,
+        lbSets.recordModify((sets) => sets.map((s) => Session_timedRecordingSet(s, sessionKind, settings))),
+        "Prepare cardio timer"
+      );
+    }
     if (!set.isCompleted) {
       SetCompleteHaptic_play();
     }
@@ -275,6 +294,7 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
       mode: type,
       forceUpdateEntryIndex: type === "workout" && !set.isCompleted,
       isExternal: false,
+      preserveRest: props.preserveRest,
     });
   }, [
     dispatch,
@@ -285,8 +305,13 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     isPlayground,
     type,
     set.isCompleted,
+    set.setTimer,
+    sessionKind,
+    lbSets,
+    settings,
     refocus,
     onCompleteExpansion,
+    props.preserveRest,
   ]);
   const onEditSetTimer = useCallback(() => {
     trackClick("workout-set-timer-edit-open");
@@ -358,6 +383,7 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
 
   const body: IWorkoutExerciseSetBodyProps = {
     set,
+    preserveRest: props.preserveRest,
     type: props.type,
     setType,
     setIndex,
@@ -386,6 +412,15 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
     onCompleteSet,
     onEditSetTimer: props.type === "workout" ? onEditSetTimer : undefined,
     onOpenRoundingInfo,
+    onWeightSetup: async () => {
+      updateProgress(
+        dispatch,
+        lb<IHistoryRecord>().pi("ui", {}).p("equipmentModal").record({ exerciseType }),
+        "Open weight setup"
+      );
+      const { navigateToModal } = await getNavigationService();
+      navigateToModal("equipmentModal", { context: "workout", progressId: props.progressId ?? 0 });
+    },
     onToggleExpand: onToggleExpandProp ? onToggleExpand : undefined,
     onEditTarget: hasEdit ? onEditTarget : undefined,
     onLongPressSet: hasEdit ? onLongPressSet : undefined,
@@ -401,7 +436,9 @@ function WorkoutExerciseSetInner(props: IWorkoutExerciseSet): JSX.Element {
       {/* Only a swap between the two bodies fades, never the row mounting with the screen.
           The distinct keys make the swap an unmount and a mount, which entering and exiting need. */}
       <LayoutAnimationConfig skipEntering skipExiting>
-        {props.isExpanded ? (
+        {props.renderBody ? (
+          props.renderBody(body)
+        ) : props.isExpanded ? (
           <Animated.View key="expanded" entering={WorkoutBodyEntering} exiting={WorkoutBodyExiting}>
             <WorkoutExerciseSetExpanded {...body} />
           </Animated.View>

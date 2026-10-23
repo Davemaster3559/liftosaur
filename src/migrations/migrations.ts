@@ -9,6 +9,7 @@ import { basicBeginnerProgram } from "../programs/basicBeginnerProgram";
 import { IVersions } from "../models/versionTracker";
 import { Settings_build } from "../models/settings";
 import { Progress_getEntryId } from "../models/progress";
+import { TrainingDate_migrate } from "../devfit/trainingDates";
 
 let latestMigrationVersion: number | undefined;
 export function getLatestMigrationVersion(): string {
@@ -22,6 +23,7 @@ export function getLatestMigrationVersion(): string {
 }
 
 export const migrations = {
+  "20261022120000_devfit_training_dates": TrainingDate_migrate,
   "20240720152051_fix_null_entries_set_weights": (aStorage: IStorage): IStorage => {
     const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
     for (const historyRecord of storage.history) {

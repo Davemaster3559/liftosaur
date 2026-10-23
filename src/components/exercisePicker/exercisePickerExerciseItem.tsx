@@ -47,7 +47,17 @@ export const ExercisePickerExerciseItem = memo(function ExercisePickerExerciseIt
   const isDisabled = !props.isEnabled && !props.isSelected;
 
   return (
-    <View className={`flex-row gap-3 ${isDisabled ? "opacity-40" : ""}`}>
+    <View
+      className={`flex-row gap-3 ${isDisabled ? "opacity-40" : ""}`}
+      style={{
+        padding: 12,
+        marginBottom: 8,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: props.isSelected ? Tailwind_semantic().devfit.accent : Tailwind_semantic().devfit.line,
+        backgroundColor: props.isSelected ? Tailwind_semantic().devfit.accentsoft : Tailwind_semantic().devfit.surface,
+      }}
+    >
       <View className="self-center w-scaled-12 min-h-scaled-10">
         <View className="p-1 rounded-lg bg-background-image">
           <ExerciseImage
@@ -62,6 +72,9 @@ export const ExercisePickerExerciseItem = memo(function ExercisePickerExerciseIt
       </View>
       <View className="flex-1 py-2">
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${isStarred ? "Remove" : "Add"} ${e.name} ${isStarred ? "from" : "to"} favorites`}
+          style={{ minHeight: 48 }}
           className="flex-row items-center gap-2"
           onPress={() => {
             if (props.onStar) {
@@ -100,6 +113,9 @@ export const ExercisePickerExerciseItem = memo(function ExercisePickerExerciseIt
       <View className="flex-row items-center gap-1 ml-2">
         {onEdit && (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${e.name}`}
+            style={{ minWidth: 48, minHeight: 48, justifyContent: "center", alignItems: "center" }}
             onPress={onEdit}
             className="p-2"
             data-testid={`custom-exercise-edit-${StringUtils_dashcase(e.name)}`}
@@ -111,6 +127,10 @@ export const ExercisePickerExerciseItem = memo(function ExercisePickerExerciseIt
         {onChoose &&
           (props.isMultiselect ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${e.name}`}
+              accessibilityState={{ selected: !!props.isSelected, disabled: isDisabled }}
+              style={{ minWidth: 48, minHeight: 48, justifyContent: "center", alignItems: "center" }}
               className="p-2"
               disabled={isDisabled}
               data-testid={`menu-item-${StringUtils_dashcase(e.name)}`}
@@ -121,6 +141,10 @@ export const ExercisePickerExerciseItem = memo(function ExercisePickerExerciseIt
             </Pressable>
           ) : (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${e.name}`}
+              accessibilityState={{ selected: !!props.isSelected, disabled: isDisabled }}
+              style={{ minWidth: 48, minHeight: 48, justifyContent: "center", alignItems: "center" }}
               className="p-2"
               disabled={isDisabled}
               data-testid={`menu-item-${StringUtils_dashcase(e.name)}`}

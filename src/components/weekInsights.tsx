@@ -13,7 +13,7 @@ import { PlannerWeekMuscles } from "../pages/planner/components/plannerWeekMuscl
 import { colorPctValue, PlannerSetSplit } from "../pages/planner/components/plannerStats";
 import { ObjectUtils_keys } from "../utils/object";
 import { PersonalRecords } from "./personalRecords";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { IconCrown } from "./icons/iconCrown";
 import { IDispatch } from "../ducks/types";
 import { Thunk_pushScreen } from "../ducks/thunks";
@@ -43,7 +43,7 @@ export function WeekInsights(props: IWeekInsightsProps): JSX.Element {
     return <View />;
   }
 
-  if (!Subscriptions_hasSubscription(props.subscription)) {
+  if (!Capabilities_hasLocal("insights")) {
     return (
       <Pressable
         className="w-full px-3 py-2 border border-border-cardyellow bg-background-cardyellow rounded-b-xl"

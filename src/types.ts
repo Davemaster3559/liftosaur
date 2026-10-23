@@ -2,6 +2,26 @@
 import * as v from "valibot";
 import { IVersions, IVersionTypes } from "./models/versionTracker/types";
 import { IEquals } from "./utils/types";
+import { ITrainingDate, VTrainingDate } from "./devfit/trainingDates";
+import { IRestEvent, VRestEvent } from "./devfit/restEvents";
+import {
+  IDevFitPlan,
+  VDevFitPlan,
+  IMilestoneSnapshot,
+  VMilestoneSnapshot,
+  ICardioPrescription,
+  VCardioPrescription,
+} from "./devfit/planSchema";
+import {
+  ICardioActivity,
+  IScheduleCredit,
+  VCardioActivity,
+  VCardioLap,
+  VCardioPhaseSettings,
+  VScheduleCredit,
+  ICardioEntryDetails,
+  VCardioEntryDetails,
+} from "./devfit/cardioSchema";
 
 export const equipments = [
   "barbell",
@@ -85,6 +105,7 @@ export const exerciseTypes = [
   "inclineChestPress",
   "inclineCurl",
   "inclineRow",
+  "inclineTreadmillWalk",
   "invertedRow",
   "isoLateralChestPress",
   "isoLateralRow",
@@ -162,6 +183,9 @@ export const exerciseTypes = [
   "squat",
   "squatRow",
   "standingCalfRaise",
+  "stationaryBike",
+  "stairClimber",
+  "otherCardio",
   "stepUp",
   "stiffLegDeadlift",
   "straightLegDeadlift",
@@ -490,6 +514,8 @@ export interface ISet {
   completedRpe?: number;
   completedSetTimer?: number;
   completedSetTimerLeft?: number;
+  cardioLaps?: v.InferOutput<typeof VCardioLap>[];
+  devfitCardio?: ICardioActivity;
   programSetIndex?: number;
 }
 const _VSet = v.object({
@@ -518,6 +544,8 @@ const _VSet = v.object({
   completedRpe: v.optional(v.number()),
   completedSetTimer: v.optional(v.number()),
   completedSetTimerLeft: v.optional(v.number()),
+  cardioLaps: v.optional(v.array(VCardioLap)),
+  devfitCardio: v.optional(VCardioActivity),
   programSetIndex: v.optional(v.number()),
 });
 const _VSetMatches: IEquals<v.InferOutput<typeof _VSet>, ISet> = true;
@@ -551,6 +579,10 @@ export interface IHistoryEntry {
   vtype: "history_entry";
   exercise: IExerciseType;
   sets: ISet[];
+  devfitCardioDetails?: ICardioEntryDetails;
+  devfitCardioPrescription?: ICardioPrescription;
+  devfitCardioRequiredSetIds?: string[];
+  devfitMilestone?: IMilestoneSnapshot;
   warmupSets: ISet[];
   index: number;
   id: string;
@@ -569,6 +601,10 @@ const _VHistoryEntry = v.object({
   vtype: v.literal("history_entry"),
   exercise: VExerciseType,
   sets: v.array(VSet),
+  devfitCardioDetails: v.optional(VCardioEntryDetails),
+  devfitCardioPrescription: v.optional(VCardioPrescription),
+  devfitCardioRequiredSetIds: v.optional(v.array(v.string())),
+  devfitMilestone: v.optional(VMilestoneSnapshot),
   warmupSets: v.array(VSet),
   index: v.number(),
   id: v.string(),
@@ -970,6 +1006,10 @@ export interface IHistoryRecord {
   programId: string;
   programName: string;
   day: number;
+  catchUpFor?: string;
+  devfitScheduleCredit?: IScheduleCredit;
+  devfitTrainingDate?: ITrainingDate;
+  devfitRequiredEntries?: string[];
   dayName: string;
   entries: IHistoryEntry[];
   startTime: number;
@@ -983,6 +1023,7 @@ export interface IHistoryRecord {
   userPromptedStateVars?: Record<string, IProgramState | undefined>;
   changes?: IHistoryRecordChange[];
   timerSince?: number;
+  devfitRestEvent?: IRestEvent;
   timerMode?: IProgressMode;
   timer?: number;
   timerEntryIndex?: number;
@@ -997,8 +1038,10 @@ export interface IHistoryRecord {
     id: string;
     side: ITimedSetSide;
     startedAt: number;
+    performedAt?: number;
     nonce?: number;
     keepTiming?: boolean;
+    preserveRest?: boolean;
   };
   // Must stay a sibling of setTimer, never a phase inside it: the watch, the iOS widget and the Android
   // live update all read setTimer's presence as "the work clock is live".
@@ -1011,6 +1054,7 @@ export interface IHistoryRecord {
     startedAt: number;
     getReady: number;
     nonce?: number;
+    preserveRest?: boolean;
   };
   // Lives on the record (not under `ui`) so it's version-tracked and syncs across devices like setTimer — an
   // AMRAP prompt opened on the watch shows in the app and vice versa, and resolving it on either device
@@ -1018,6 +1062,7 @@ export interface IHistoryRecord {
   amrapModal?: {
     entryIndex: number;
     setIndex: number;
+    preserveRest?: boolean;
     isAmrap?: boolean;
     logRpe?: boolean;
     askWeight?: boolean;
@@ -1039,6 +1084,10 @@ const _VHistoryRecord = v.object({
   programId: v.string(),
   programName: v.string(),
   day: v.number(),
+  catchUpFor: v.optional(v.string()),
+  devfitScheduleCredit: v.optional(VScheduleCredit),
+  devfitTrainingDate: v.optional(VTrainingDate),
+  devfitRequiredEntries: v.optional(v.array(v.string())),
   dayName: v.string(),
   entries: v.array(VHistoryEntry),
   startTime: v.number(),
@@ -1052,6 +1101,7 @@ const _VHistoryRecord = v.object({
   userPromptedStateVars: v.optional(v.record(v.string(), v.optional(VProgramState))),
   changes: v.optional(v.array(VHistoryRecordChange)),
   timerSince: v.optional(v.number()),
+  devfitRestEvent: v.optional(VRestEvent),
   timerMode: v.optional(VProgressMode),
   timer: v.optional(v.number()),
   timerEntryIndex: v.optional(v.number()),
@@ -1064,8 +1114,10 @@ const _VHistoryRecord = v.object({
       id: v.string(),
       side: VTimedSetSide,
       startedAt: v.number(),
+      performedAt: v.optional(v.number()),
       nonce: v.optional(v.number()),
       keepTiming: v.optional(v.boolean()),
+      preserveRest: v.optional(v.boolean()),
     })
   ),
   setTimerGetReady: v.optional(
@@ -1078,12 +1130,14 @@ const _VHistoryRecord = v.object({
       startedAt: v.number(),
       getReady: v.number(),
       nonce: v.optional(v.number()),
+      preserveRest: v.optional(v.boolean()),
     })
   ),
   amrapModal: v.optional(
     v.object({
       entryIndex: v.number(),
       setIndex: v.number(),
+      preserveRest: v.optional(v.boolean()),
       isAmrap: v.optional(v.boolean()),
       logRpe: v.optional(v.boolean()),
       askWeight: v.optional(v.boolean()),
@@ -1192,6 +1246,7 @@ export const VPlannerProgram: v.GenericSchema<IPlannerProgram> = _VPlannerProgra
 
 export interface IProgram {
   vtype: "program";
+  devfitPlan?: IDevFitPlan;
   exercises: IProgramExercise[];
   id: string;
   name: string;
@@ -1212,6 +1267,7 @@ export interface IProgram {
 }
 const _VProgram = v.object({
   vtype: v.literal("program"),
+  devfitPlan: v.optional(VDevFitPlan),
   exercises: v.array(VProgramExercise),
   id: v.string(),
   name: v.string(),
@@ -1611,6 +1667,24 @@ const _VMuscleGroupsSettingsMatches: IEquals<
 void _VMuscleGroupsSettingsMatches;
 export const VMuscleGroupsSettings: v.GenericSchema<IMuscleGroupsSettings> = _VMuscleGroupsSettings;
 
+export const VDevFitSchedule = v.object({
+  setupDismissed: v.optional(v.boolean()),
+  cycleDays: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
+  anchorDate: v.optional(v.string()),
+  homeTimeZone: v.optional(v.string()),
+  referenceSource: v.optional(v.picklist(["confirmed", "personal_oct7"])),
+  personalRotation: v.optional(v.boolean()),
+  trainingDayRolloverMinutes: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1439))),
+  days: v.array(
+    v.object({
+      day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
+      programDay: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      context: v.optional(v.picklist(["work", "off"])),
+    })
+  ),
+});
+export type IDevFitSchedule = v.InferOutput<typeof VDevFitSchedule>;
+
 export interface ISettings {
   timers: ISettingsTimers;
   gyms: IGym[];
@@ -1660,6 +1734,13 @@ export interface ISettings {
   recentExercises?: Partial<Record<string, string[]>>;
   theme?: "dark" | "light";
   currentBodyweight?: IWeight;
+  devfitCycleDays?: number;
+  devfitCycleTarget?: number;
+  devfitSchedules?: Record<string, IDevFitSchedule>;
+  devfitCardioSuggestions?: {
+    walk?: v.InferOutput<typeof VCardioPhaseSettings>;
+    jog?: v.InferOutput<typeof VCardioPhaseSettings>;
+  };
   affiliateEnabled?: boolean;
 }
 const _VSettings = v.object({
@@ -1711,6 +1792,12 @@ const _VSettings = v.object({
   recentExercises: v.optional(v.record(VExerciseId, v.optional(v.array(VExerciseId)))),
   theme: v.optional(v.union([v.literal("dark"), v.literal("light")])),
   currentBodyweight: v.optional(VWeight),
+  devfitCycleDays: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
+  devfitCycleTarget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60))),
+  devfitSchedules: v.optional(v.record(v.string(), VDevFitSchedule)),
+  devfitCardioSuggestions: v.optional(
+    v.object({ walk: v.optional(VCardioPhaseSettings), jog: v.optional(VCardioPhaseSettings) })
+  ),
   affiliateEnabled: v.optional(v.boolean()),
 });
 const _VSettingsMatches: IEquals<v.InferOutput<typeof _VSettings>, ISettings> = true;
@@ -1987,7 +2074,7 @@ export const CONTROLLED_TYPES = ["program", "gym", "progress", "history_entry"] 
 export type IControlledType = (typeof CONTROLLED_TYPES)[number];
 
 export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
-  program: ["name", "nextDay", "planner"] as const,
+  program: ["name", "nextDay", "planner", "devfitPlan"] as const,
   gym: ["name", "equipment"] as const,
   progress: [
     "entries",
@@ -1999,6 +2086,7 @@ export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
     "updatedAt",
     "changes",
     "timerSince",
+    "devfitRestEvent",
     "timerMode",
     "timer",
     "timerEntryIndex",
@@ -2007,8 +2095,15 @@ export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
     "setTimerGetReady",
     "amrapModal",
     "currentEntryIndex",
+    "devfitScheduleCredit",
+    "devfitTrainingDate",
+    "devfitRequiredEntries",
   ] as const,
   history_entry: [
+    "devfitCardioDetails",
+    "devfitCardioPrescription",
+    "devfitCardioRequiredSetIds",
+    "devfitMilestone",
     "exercise",
     "sets",
     "warmupSets",

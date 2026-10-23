@@ -35,7 +35,9 @@ RCT_EXPORT_MODULE(LiftosaurTimer)
   }];
 }
 
-- (void)stopTimer:(RCTPromiseResolveBlock)resolve
+- (void)stopTimer:(NSString * _Nullable)eventId
+           eventRevision:(NSNumber * _Nullable)eventRevision
+           resolve:(RCTPromiseResolveBlock)resolve
            reject:(RCTPromiseRejectBlock)reject {
   [[LiftosaurTimerImpl shared] stopTimer];
   resolve(nil);
@@ -68,6 +70,7 @@ RCT_EXPORT_MODULE(LiftosaurTimer)
 - (void)playSound:(double)volume
         vibration:(BOOL)vibration
             sound:(NSString *)sound
+   ignoreDoNotDisturb:(BOOL)ignoreDoNotDisturb
           resolve:(RCTPromiseResolveBlock)resolve
            reject:(RCTPromiseRejectBlock)reject {
   [[LiftosaurTimerImpl shared] playSoundWithVolume:volume vibration:vibration sound:sound];

@@ -9,6 +9,7 @@ import { IDispatch } from "../ducks/types";
 import { IHistoryRecord, ISet } from "../types";
 import { MathUtils_clamp } from "../utils/math";
 import { StringUtils_pad } from "../utils/string";
+import { Cardio_editDuration } from "../devfit/cardio";
 
 interface ISetTimerEditContentProps {
   set: ISet;
@@ -38,11 +39,7 @@ export function SetTimerEditContent(props: ISetTimerEditContentProps): JSX.Eleme
   const onClear = (): void => {
     updateProgress(
       dispatch,
-      [
-        lbSet.p("completedSetTimer").record(undefined),
-        lbSet.p("completedSetTimerLeft").record(undefined),
-        lbModal.record(undefined),
-      ],
+      [lbSet.recordModify((s) => Cardio_editDuration(s)), lbModal.record(undefined)],
       "clear-set-timer"
     );
   };
@@ -58,10 +55,13 @@ export function SetTimerEditContent(props: ISetTimerEditContentProps): JSX.Eleme
     updateProgress(
       dispatch,
       [
-        lbSet.p("completedSetTimer").record(newSeconds),
-        ...(isUnilateral
-          ? [lbSet.p("completedSetTimerLeft").record(toSeconds(leftMinutesValue, leftSecondsValue, initialLeftSeconds))]
-          : []),
+        lbSet.recordModify((s) =>
+          Cardio_editDuration(
+            s,
+            newSeconds,
+            isUnilateral ? toSeconds(leftMinutesValue, leftSecondsValue, initialLeftSeconds) : undefined
+          )
+        ),
         lbModal.record(undefined),
       ],
       "edit-set-timer"
@@ -124,6 +124,11 @@ export function SetTimerEditContent(props: ISetTimerEditContentProps): JSX.Eleme
     <View>
       <Text className="pb-2 font-bold">Edit recorded time</Text>
       <Text className="pb-2 text-xs text-text-secondary">(in mm:ss)</Text>
+      {set.devfitCardio?.segments?.length ? (
+        <Text className="pb-2 text-xs text-text-secondary">
+          Changing the duration clears phase times that no longer match it. Machine measurements are kept.
+        </Text>
+      ) : null}
       {isUnilateral && (
         <View className="pb-2">
           {durationRow(

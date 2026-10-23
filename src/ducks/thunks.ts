@@ -5,6 +5,8 @@ import type { INavigateOpts } from "../navigation/navigationService";
 import type { IAllScreenParamList } from "../navigation/types";
 
 import { getNavigationService } from "../navigation/navUtils";
+import { CatchUp_build } from "../devfit/catchUp";
+import { ICapturedRest, IRestEvent, RestEvents_matches, RestEvents_restoreCaptured } from "../devfit/restEvents";
 import RB from "rollbar";
 import { IGetStorageResponse, IPostSyncResponse, Service } from "../api/service";
 import { lb } from "lens-shmens";
@@ -16,6 +18,7 @@ import {
   Program_isEmpty,
   Program_editAction,
   Program_nextHistoryRecord,
+  Program_getListOfDays,
   Program_create,
   Program_exportProgramToFile,
   Program_exportProgramToLink,
@@ -33,7 +36,6 @@ import {
   IOfferData,
   IState,
   ISubscriptionLoading,
-  updateProgress,
   updateState,
 } from "../models/state";
 import {
@@ -60,7 +62,14 @@ import { IByExercise } from "../pages/planner/plannerEvaluator";
 import { CollectionUtils_compact, CollectionUtils_setAt } from "../utils/collection";
 import { ImportExporter_exportStorage, ImportExporter_getExportedProgram } from "../lib/importexporter";
 import { Storage_mergeStorage, Storage_isChanged, Storage_get, Storage_setAffiliate } from "../models/storage";
-import { History_exportAsCSV, History_calories, History_pauseWorkoutState } from "../models/history";
+import {
+  History_exportAsCSV,
+  History_calories,
+  History_pauseWorkoutState,
+  History_isActivelyPaused,
+  History_isPaused,
+  History_clockNow,
+} from "../models/history";
 import { ImportSession_apply, ImportSession_findEditedRecordIds, ImportSession_undo } from "../models/importSession";
 import { ImportFileError } from "../utils/importTypes";
 import { StringUtils_pluralize } from "../utils/string";
@@ -102,6 +111,8 @@ import {
   Progress_getFirstIncompleteWorkoutSet,
   Progress_updateTimer,
   Progress_getCurrentProgress,
+  Progress_lbProgress,
+  Progress_stopTimer,
   Progress_getProgressId,
   Progress_isCurrent,
   Progress_stop,
@@ -114,6 +125,8 @@ import { getLatestMigrationVersion } from "../migrations/migrations";
 import { LogUtils_log } from "../utils/log";
 import { lg } from "../utils/posthog";
 import { RollbarUtils_config } from "../utils/rollbar";
+import { DevFitConfig } from "../devfit/config";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { UrlUtils_build } from "../utils/url";
 import { ImportFromLiftosaur_convertLiftosaurCsvToHistoryRecords } from "../utils/importFromLiftosaur";
 import { ImportFromHevy_convertHevyCsvToHistoryRecords } from "../utils/importFromHevy";
@@ -743,18 +756,24 @@ export function Thunk_updateTimer(
   newTimer: number,
   entryIndex: number | undefined,
   setIndex: number | undefined,
-  skipLiveActivityUpdate: boolean
+  skipLiveActivityUpdate: boolean,
+  expected?: Pick<IRestEvent, "id" | "deadline" | "revision">,
+  nativeTappedAt?: number,
+  nativeRest?: ICapturedRest
 ): IThunk {
   return async (dispatch, getState, env) => {
     const state = getState();
-    const progress = Progress_getProgress(state);
-    if (!progress) {
+    let progress = nativeTappedAt != null ? Progress_getCurrentProgress(state) : Progress_getProgress(state);
+    if (!progress || !RestEvents_matches(progress, expected)) {
       return;
     }
+    progress = RestEvents_restoreCaptured(
+      progress,
+      nativeRest,
+      nativeTappedAt,
+      !History_isActivelyPaused(progress.intervals)
+    );
     const program = Program_getProgram(state, progress.programId);
-    if (!program) {
-      return;
-    }
     const effects: INativeEffect[] = [];
     const newProgress = Progress_updateTimer(
       effects,
@@ -766,10 +785,32 @@ export function Thunk_updateTimer(
       setIndex,
       !!skipLiveActivityUpdate,
       state.storage.settings,
-      state.storage.subscription
+      state.storage.subscription,
+      nativeTappedAt
     );
     NativeEffects_apply(env, effects);
-    updateProgress(dispatch, lb<IHistoryRecord>().record(newProgress), "Update rest timer");
+    updateState(dispatch, [Progress_lbProgress(progress.id).record(newProgress)], "Update rest timer");
+  };
+}
+
+export function Thunk_skipRest(expected?: Pick<IRestEvent, "id" | "deadline" | "revision">): IThunk {
+  return async (dispatch, getState, env) => {
+    const state = getState();
+    const current = Progress_getCurrentProgress(state);
+    const progress = current && RestEvents_matches(current, expected) ? current : Progress_getProgress(state);
+    if (
+      !progress ||
+      !RestEvents_matches(progress, expected) ||
+      progress.timer == null ||
+      progress.timerSince == null ||
+      History_clockNow(progress) >= progress.timerSince + progress.timer * 1000
+    ) {
+      return;
+    }
+    const effects: INativeEffect[] = [];
+    const stopped = Progress_stopTimer(effects, progress);
+    NativeEffects_apply(env, effects);
+    updateState(dispatch, [Progress_lbProgress(progress.id).record(stopped)], "Skip matching rest");
   };
 }
 
@@ -814,7 +855,7 @@ export function Thunk_completeSetExternal(
   return async (dispatch, getState, env) => {
     const state = getState();
     const progress = Progress_getProgress(state);
-    if (!progress) {
+    if (!progress || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     const entry = progress.entries[entryIndex];
@@ -883,7 +924,7 @@ export function Thunk_recordSetTimer(
   return async (dispatch, getState, env) => {
     const state = getState();
     const progress = Progress_getProgress(state);
-    if (!progress) {
+    if (!progress || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     // A native Live Activity / Live Update "Stop & Record"/"Log & keep" tap can arrive stale — the timed set
@@ -963,7 +1004,7 @@ export function Thunk_refreshLiveActivity(): IThunk {
   return async (dispatch, getState, env) => {
     const state = getState();
     const progress = Progress_getProgress(state);
-    if (!progress || !Progress_isCurrent(progress)) {
+    if (!progress || !Progress_isCurrent(progress) || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     const program = Program_getFullProgram(state, progress.programId);
@@ -1059,7 +1100,7 @@ export interface IQueueableCountdownTap {
 export function Thunk_startSetTimerWork(queuedTap?: IQueueableCountdownTap): IThunk {
   return async (dispatch, getState, env) => {
     const progress = Progress_getProgress(getState());
-    if (progress == null) {
+    if (progress == null || History_isActivelyPaused(progress.intervals)) {
       return;
     }
     if (queuedTap != null) {
@@ -1089,7 +1130,7 @@ export function Thunk_playAudioNotification(): IThunk {
   return async (dispatch, getState, env) => {
     if (getState().adminKey == null) {
       const settings = getState().storage.settings;
-      env.audio.play(settings.volume, !!settings.vibration);
+      env.audio.play(settings.volume, !!settings.vibration, "notification", !!settings.ignoreDoNotDisturb);
     }
   };
 }
@@ -1249,7 +1290,7 @@ export function Thunk_pushToEditProgram(): IThunk {
   };
 }
 
-export function Thunk_startProgramDay(programId?: string): IThunk {
+export function Thunk_startProgramDay(programId?: string, programDay?: number): IThunk {
   return async (dispatch, getState) => {
     const state = getState();
     const progress = Progress_getCurrentProgress(state);
@@ -1258,14 +1299,62 @@ export function Thunk_startProgramDay(programId?: string): IThunk {
     } else if (state.storage.currentProgramId != null) {
       const program = Program_getProgram(state, programId ?? state.storage.currentProgramId);
       if (program != null) {
-        const newProgress = Program_nextHistoryRecord(program, state.storage.settings, state.storage.stats);
+        if (programDay != null) {
+          if (
+            !Program_getListOfDays(Program_evaluate(program, state.storage.settings)).some(
+              ([id]) => Number(id) === programDay
+            )
+          ) {
+            return;
+          }
+          updateState(
+            dispatch,
+            [lb<IState>().p("storage").p("programs").findBy("id", program.id).p("nextDay").record(programDay)],
+            "Select calendar session"
+          );
+        }
+        const newProgress = Program_nextHistoryRecord(
+          programDay == null ? program : { ...program, nextDay: programDay },
+          state.storage.settings,
+          state.storage.stats
+        );
         updateState(dispatch, [lb<IState>().p("storage").p("progress").record([newProgress])], "Create new progress");
+        dispatch({ type: "ResumeWorkoutAction", isPlayground: false, hasSubscription: false });
         dispatch(Thunk_log("ls-start-workout"));
+        // Let the new progress reach StateContext before mounting its screen.
+        // Native navigation can otherwise mount against the previous context and
+        // its missing-record fallback immediately redirects back to Today.
+        await new Promise((resolve) => setTimeout(resolve, 0));
         dispatch(Thunk_pushScreen("progress", { id: newProgress.id }, { tab: "workout" }));
       } else {
         Dialog_alert("No currently selected program");
       }
     }
+  };
+}
+
+export function Thunk_startCatchUp(includeCardio = false): IThunk {
+  return async (dispatch, getState) => {
+    const state = getState();
+    const ongoing = Progress_getCurrentProgress(state);
+    if (ongoing) {
+      dispatch(Thunk_pushScreen("progress", { id: ongoing.id }, { tab: "workout" }));
+      return;
+    }
+    const program = Program_getProgram(state, state.storage.currentProgramId);
+    if (!program) {
+      return;
+    }
+    const record = CatchUp_build(
+      Program_evaluate(program, state.storage.settings),
+      state.storage.settings,
+      state.storage.stats,
+      includeCardio
+    );
+    updateState(dispatch, [lb<IState>().p("storage").p("progress").record([record])], "Start optional catch-up");
+    dispatch({ type: "ResumeWorkoutAction", isPlayground: false, hasSubscription: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dispatch(Thunk_pushScreen("progress", { id: record.id }, { tab: "workout" }));
   };
 }
 
@@ -1333,10 +1422,13 @@ export function Thunk_pushScreen<T extends IScreen>(
   opts?: INavigateOpts
 ): IThunk {
   return async (dispatch, getState) => {
+    if (screen === "hearaboutus" && !DevFitConfig.telemetryEnabled) {
+      screen = "programselect" as T;
+    }
     dispatch(Thunk_postevent("navigate-to-" + screen));
     if (
       ["musclesProgram", "musclesDay", "graphsList"].indexOf(screen) !== -1 &&
-      !Subscriptions_hasSubscription(getState().storage.subscription)
+      !Capabilities_hasLocal(screen === "graphsList" ? "graphs" : "muscles")
     ) {
       opts = { stack: "subscription" };
       screen = "subscription" as T;
@@ -1376,6 +1468,9 @@ export function Thunk_updateScreenParams<T extends IScreen>(params?: IScreenPara
 
 export function Thunk_maybeRequestReview(): IThunk {
   return async (dispatch, getState) => {
+    if (!DevFitConfig.storeEnabled) {
+      return;
+    }
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -1409,6 +1504,9 @@ export function Thunk_maybeRequestReview(): IThunk {
 
 export function Thunk_maybeRequestSignup(): IThunk {
   return async (dispatch, getState) => {
+    if (!DevFitConfig.officialCloudEnabled) {
+      return;
+    }
     try {
       const history = getState().storage.history;
       const state = getState();
@@ -1556,7 +1654,35 @@ export function Thunk_finishProgramDay(id: number): IThunk {
 export function Thunk_pauseWorkout(): IThunk {
   return async (dispatch, getState, env) => {
     env.workout.pauseWorkout();
+    if (getState().storage.progress?.[0]?.timer != null) {
+      env.timer.stopTimer();
+    }
     History_pauseWorkoutState(dispatch);
+  };
+}
+
+export function Thunk_restoreWorkout(): IThunk {
+  return async (dispatch, getState, env) => {
+    const state = getState();
+    const progress = Progress_getCurrentProgress(state);
+    if (!progress) {
+      return;
+    }
+    if (History_isPaused(progress.intervals)) {
+      env.workout.pauseWorkout();
+      env.timer.stopTimer();
+      return;
+    }
+    env.workout.resumeWorkout({
+      reminder: state.storage.settings.timers.reminder ?? 0,
+      isStart: false,
+      hasSubscription: false,
+    });
+    if (progress.timer != null && progress.timerSince != null) {
+      dispatch(Thunk_updateTimer(progress.timer, undefined, undefined, true));
+    }
+    dispatch(Thunk_checkSetTimer());
+    dispatch(Thunk_refreshLiveActivity());
   };
 }
 
@@ -2189,7 +2315,7 @@ export function Thunk_fetchInitial(): IThunk {
     }
     dispatch(Thunk_fetchPrograms());
     // A debug sandbox must not verify the target's subscription receipts or restore IAPs.
-    if (AdminDebug_isDebugAccountId(getState().storage.tempUserId)) {
+    if (!DevFitConfig.storeEnabled || AdminDebug_isDebugAccountId(getState().storage.tempUserId)) {
       return;
     }
     dispatch(Thunk_verifySubscriptionKey());

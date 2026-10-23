@@ -9,7 +9,7 @@ import { IconEdit2 } from "./icons/iconEdit2";
 import { IconBarbellPlates } from "./icons/iconBarbellPlates";
 import { PlatesBar } from "./platesBar";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
-import { Subscriptions_hasSubscription } from "../utils/subscriptions";
+import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { LinkButton } from "./linkButton";
 import { InputNumber2 } from "./inputNumber2";
 import { InputWeight2 } from "./inputWeight2";
@@ -40,7 +40,7 @@ export function WorkoutExerciseSetExpanded(props: IWorkoutExerciseSetBodyProps):
     return list;
   }, [onEditTarget, onDeleteSet]);
   const previousLines = props.previousLines ?? [];
-  const isSubscribed = props.subscription != null && Subscriptions_hasSubscription(props.subscription);
+  const isSubscribed = Capabilities_hasLocal("plates");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { onMenuOpenChange } = props;
   const onOpenChange = useCallback(

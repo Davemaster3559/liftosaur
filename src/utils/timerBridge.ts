@@ -10,13 +10,18 @@ export type INativeTimerStartParams = {
   ignoreDoNotDisturb: boolean;
   timerSinceMs: number;
   timerSeconds: number;
+  eventId?: string;
+  eventRevision?: number;
+  deadline?: number;
 };
 
 export interface ITimerBridge {
   startTimer(params: INativeTimerStartParams): void;
-  stopTimer(): void;
-  playSound(volume: number, vibration: boolean, sound: string): boolean;
-  subscribeOnScheduled(handler: () => void): () => void;
+  stopTimer(eventId?: string, eventRevision?: number): void;
+  playSound(volume: number, vibration: boolean, sound: string, ignoreDoNotDisturb?: boolean): boolean;
+  subscribeOnScheduled(
+    handler: (event?: { eventId?: string; deadline?: number; eventRevision?: number; scheduled: boolean }) => void
+  ): () => void;
   scheduleReminder(duration: number, title: string, body: string): void;
   cancelReminder(): void;
 }

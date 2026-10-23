@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import { View } from "react-native";
+import { Text } from "./primitives/text";
 import { IDispatch } from "../ducks/types";
 import { Modal } from "./modal";
 import { MenuItemEditable } from "./menuItemEditable";
@@ -47,6 +48,10 @@ export function ModalEquipmentContent(props: IModalEquipmentContentProps): JSX.E
   const currentGymId = props.settings.currentGymId ?? props.settings.gyms[0].id;
   return (
     <View data-testid="modal-equipment" testID="modal-equipment" className="pb-6">
+      <Text className="text-sm text-text-secondary" style={{ paddingVertical: 16 }}>
+        For a machine, choose None and enter its weight step, or use equipment with a fixed list of available weights.
+        Plate and dumbbell settings follow your gym configuration.
+      </Text>
       <MenuItemEditable
         type="select"
         name="Equipment"
@@ -73,7 +78,7 @@ export function ModalEquipmentContent(props: IModalEquipmentContentProps): JSX.E
         {currentEquipment == null ? (
           <InputNumber
             type="number"
-            label="Default Rounding"
+            label={`Weight step · ${props.settings.units}`}
             min={0}
             step={0.5}
             max={100}

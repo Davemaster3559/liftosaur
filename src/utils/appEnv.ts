@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { Service } from "../api/service";
+import { DevFitService } from "../devfit/service";
 import { AudioInterface } from "../lib/audioInterface";
 import { IEnv } from "../models/state";
 import { navigationRef } from "../navigation/navigationRef";
@@ -16,9 +16,10 @@ import { WorkoutMirroring } from "./nativeWorkoutMirroringBridge";
 import { HeartRateStore } from "./heartRateStore";
 import { Persistence } from "./persistence";
 import { PushSyncClient } from "./pushSyncClient";
+import { DevFitConfig } from "../devfit/config";
 
 export function AppEnv_build(persistence: Persistence): IEnv {
-  const service = new Service(fetch);
+  const service = new DevFitService(fetch);
   const timer = new TimerBridge();
   const mirroring = new WorkoutMirroring();
   return {
@@ -28,9 +29,11 @@ export function AppEnv_build(persistence: Persistence): IEnv {
     persistence,
     navigationRef,
     getCurrentScreenData,
-    iap: new IapAdapter(),
+    iap: DevFitConfig.storeEnabled ? new IapAdapter() : undefined,
     health: new HealthAdapter(),
-    push: new PushSyncClient(service, NativeLiftosaurPush, Platform.OS === "ios" ? "ios" : "android"),
+    push: DevFitConfig.officialCloudEnabled
+      ? new PushSyncClient(service, NativeLiftosaurPush, Platform.OS === "ios" ? "ios" : "android")
+      : undefined,
     timer,
     mirroring,
     heartRate: new HeartRateStore(mirroring),
