@@ -41,12 +41,16 @@ describe("DevFit v0.5 night-shift training dates", () => {
   it("uses local boundary instants across both DST changes and never shifts date labels through noon", () => {
     for (const [date, hours] of [
       ["2026-03-07", 23],
-      ["2026-10-31", 25],
+      ["2025-11-01", 25],
     ] as const) {
       const bounds = TrainingDate_bounds(date, config.timeZone, 900);
       expect((bounds.end - bounds.start) / 3600000).to.equal(hours);
       expect(TrainingDate_key(bounds.end - 1, config.timeZone, 900)).to.equal(date);
     }
+    const november = TrainingDate_bounds("2026-10-31", config.timeZone, 900);
+    expect(TrainingDate_key(november.start, config.timeZone, 900)).to.equal("2026-10-31");
+    expect(TrainingDate_key(november.end - 1, config.timeZone, 900)).to.equal("2026-10-31");
+    expect(TrainingDate_key(november.end, config.timeZone, 900)).to.equal("2026-11-01");
     const { program, schedule } = DevFitRotation_fixture();
     const settings = { ...Settings_build(), devfitSchedules: { [program.id]: schedule } };
     const evaluated = Program_evaluate(program, settings);

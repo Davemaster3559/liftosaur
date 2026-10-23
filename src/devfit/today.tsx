@@ -51,6 +51,7 @@ export function DevFitToday(props: {
   const clock = useNow(dateConfig);
   const now = props.now ?? clock;
   const [showMissed, setShowMissed] = useState(false);
+  const [showSession, setShowSession] = useState(false);
   const [includeCardio, setIncludeCardio] = useState(false);
   const plan = useMemo(
     () => Schedule_overview(evaluated, props.settings, props.history, now),
@@ -219,9 +220,7 @@ export function DevFitToday(props: {
                     label={
                       props.progress
                         ? "Continue workout →"
-                        : plan.mismatch
-                          ? "Use today's session →"
-                          : "Start workout →"
+                        : `Start ${Session_displayName(session?.name ?? "workout")} →`
                     }
                     testID="devfit-start-session"
                     onPress={() => props.onStart(props.progress ? undefined : plan.selectedDay)}
@@ -240,7 +239,7 @@ export function DevFitToday(props: {
             )}
             {session && session.exercises.length > 0 && (
               <DevFitSection title="Your session" detail="In training order">
-                {session.exercises.map((exercise, index) => (
+                {session.exercises.slice(0, showSession ? undefined : 2).map((exercise, index) => (
                   <View
                     key={exercise.id}
                     style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 }}
@@ -268,6 +267,13 @@ export function DevFitToday(props: {
                     </View>
                   </View>
                 ))}
+                {session.exercises.length > 2 && (
+                  <DevFitAction
+                    secondary
+                    label={showSession ? "Show compact preview" : `View all ${session.exercises.length} exercises`}
+                    onPress={() => setShowSession(!showSession)}
+                  />
+                )}
               </DevFitSection>
             )}
             {!props.progress && plan.missed.length > 0 && (
