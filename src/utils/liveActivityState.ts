@@ -28,6 +28,8 @@ export interface ILiveActivityEntry {
 }
 
 export interface ILiveActivityRest {
+  eventId?: string;
+  eventRevision?: number;
   restTimerSince: number;
   restTimer: number;
   // Whether the resting set is part of an `auto` circuit (so the live activity shows "tap to update" when

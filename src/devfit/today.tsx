@@ -8,7 +8,8 @@ import { History_getPersonalRecords } from "../models/history";
 import { ExerciseImage } from "../components/exerciseImage";
 import { useNow } from "../utils/useNow";
 import { Cycle_summary } from "./cycle";
-import { Schedule_overview, Schedule_suggestion, Schedule_anchor } from "./schedule";
+import { Schedule_overview, Schedule_suggestion, Schedule_anchor, Schedule_get } from "./schedule";
+import { TrainingDate_key, TrainingDate_rolloverLabel, TrainingDate_scheduleConfig } from "./trainingDates";
 import { updateSettings } from "../models/state";
 import { lb } from "lens-shmens";
 import { Session_completion, Session_day, Session_displayName, SESSION_LABELS } from "./presentation";
@@ -26,6 +27,7 @@ import {
 import { DevFitPage } from "./page";
 import { DevFitCardioLog } from "./cardioLog";
 import { Dates_key, Dates_label } from "./dates";
+import { DevFitPlanUpgradePanel } from "./planUpgradePanel";
 
 export function DevFitToday(props: {
   program: IProgram;
@@ -44,11 +46,12 @@ export function DevFitToday(props: {
   onChooseDay: () => void;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
-  const clock = useNow();
+  const evaluated = useMemo(() => Program_evaluate(props.program, props.settings), [props.program, props.settings]);
+  const dateConfig = TrainingDate_scheduleConfig(Schedule_get(evaluated, props.settings));
+  const clock = useNow(dateConfig);
   const now = props.now ?? clock;
   const [showMissed, setShowMissed] = useState(false);
   const [includeCardio, setIncludeCardio] = useState(false);
-  const evaluated = useMemo(() => Program_evaluate(props.program, props.settings), [props.program, props.settings]);
   const plan = useMemo(
     () => Schedule_overview(evaluated, props.settings, props.history, now),
     [evaluated, props.settings, props.history, now]
@@ -82,8 +85,14 @@ export function DevFitToday(props: {
       <DevFitTitle
         eyebrow="DevFit / your training"
         title="Today"
-        subtitle={Dates_label(Dates_key(now, plan.config.homeTimeZone))}
+        subtitle={`Training date · ${Dates_label(TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes))}`}
       />
+      <Text className="text-xs" style={{ color: c.muted }}>
+        Day changes at {TrainingDate_rolloverLabel(dateConfig.rolloverMinutes)} · {dateConfig.timeZone}
+        {Dates_key(now, dateConfig.timeZone) !== TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes)
+          ? ` · Clock date ${Dates_label(Dates_key(now, dateConfig.timeZone))}`
+          : ""}
+      </Text>
       {plan.today && (
         <View testID="devfit-rotation-day-badge" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <DevFitTag label={`Rotation Day ${plan.today.day}`} />
@@ -174,7 +183,7 @@ export function DevFitToday(props: {
                 </Text>
                 {plan.mismatch && !props.progress && (
                   <Text testID="devfit-calendar-mismatch" style={{ color: c.accent }}>
-                    Your program pointer differs from today's rotation. Use today's session to select {session?.name}.
+                    Today's scheduled session is {session?.name}. Your work/off calendar stays in place.
                   </Text>
                 )}
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18 }}>
@@ -367,6 +376,15 @@ export function DevFitToday(props: {
           </>
         }
       />
+      {props.dispatch && !props.program.devfitPlan && (
+        <DevFitPlanUpgradePanel
+          program={props.program}
+          settings={props.settings}
+          history={props.history}
+          dispatch={props.dispatch}
+          isOngoing={!!props.progress}
+        />
+      )}
     </DevFitPage>
   );
 }

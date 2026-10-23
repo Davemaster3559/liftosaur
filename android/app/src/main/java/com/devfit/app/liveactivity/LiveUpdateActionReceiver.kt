@@ -48,12 +48,18 @@ class LiveUpdateActionReceiver : BroadcastReceiver() {
             }
 
             ACTION_ADJUST_TIMER_PLUS, ACTION_ADJUST_TIMER_MINUS -> {
+                val eventId = intent.getStringExtra("restEventId") ?: return
+                val revision = intent.getLongExtra("restRevision", 0)
+                val deadline = restTimerSince + restTimer * 1000L
+                if (System.currentTimeMillis() >= deadline) return
                 val addSeconds = if (intent.action == ACTION_ADJUST_TIMER_PLUS) 15 else -15
                 val newRestTimer = maxOf(0, restTimer + addSeconds)
+                val tappedAt = System.currentTimeMillis()
+                if (!com.devfit.app.timer.Notification(context).adjustRest(eventId, deadline, revision, restTimerSince, newRestTimer)) return
 
                 val manager = LiveActivityEventDispatcher.getManager()
                 Handler(Looper.getMainLooper()).post {
-                    manager?.adjustRestTimer(newRestTimer, restTimerSince)
+                    manager?.adjustRestTimer(newRestTimer, restTimerSince, eventId, deadline, revision)
                 }
 
                 val event = Arguments.createMap().apply {
@@ -61,6 +67,12 @@ class LiveUpdateActionReceiver : BroadcastReceiver() {
                     putInt("entryIndex", entryIndex)
                     putInt("setIndex", setIndex)
                     putInt("addSeconds", addSeconds)
+                    putString("restEventId", eventId)
+                    putDouble("restDeadline", deadline.toDouble())
+                    putDouble("restRevision", revision.toDouble())
+                    putDouble("restTimerSince", restTimerSince.toDouble())
+                    putInt("restTimer", restTimer)
+                    putDouble("tappedAt", tappedAt.toDouble())
                 }
                 LiveActivityEventDispatcher.emit(event)
             }

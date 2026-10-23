@@ -6,6 +6,7 @@ import type { IAllScreenParamList } from "../navigation/types";
 
 import { getNavigationService } from "../navigation/navUtils";
 import { CatchUp_build } from "../devfit/catchUp";
+import { ICapturedRest, IRestEvent, RestEvents_matches, RestEvents_restoreCaptured } from "../devfit/restEvents";
 import RB from "rollbar";
 import { IGetStorageResponse, IPostSyncResponse, Service } from "../api/service";
 import { lb } from "lens-shmens";
@@ -35,7 +36,6 @@ import {
   IOfferData,
   IState,
   ISubscriptionLoading,
-  updateProgress,
   updateState,
 } from "../models/state";
 import {
@@ -68,6 +68,7 @@ import {
   History_pauseWorkoutState,
   History_isActivelyPaused,
   History_isPaused,
+  History_clockNow,
 } from "../models/history";
 import { ImportSession_apply, ImportSession_findEditedRecordIds, ImportSession_undo } from "../models/importSession";
 import { ImportFileError } from "../utils/importTypes";
@@ -110,6 +111,8 @@ import {
   Progress_getFirstIncompleteWorkoutSet,
   Progress_updateTimer,
   Progress_getCurrentProgress,
+  Progress_lbProgress,
+  Progress_stopTimer,
   Progress_getProgressId,
   Progress_isCurrent,
   Progress_stop,
@@ -753,14 +756,23 @@ export function Thunk_updateTimer(
   newTimer: number,
   entryIndex: number | undefined,
   setIndex: number | undefined,
-  skipLiveActivityUpdate: boolean
+  skipLiveActivityUpdate: boolean,
+  expected?: Pick<IRestEvent, "id" | "deadline" | "revision">,
+  nativeTappedAt?: number,
+  nativeRest?: ICapturedRest
 ): IThunk {
   return async (dispatch, getState, env) => {
     const state = getState();
-    const progress = Progress_getProgress(state);
-    if (!progress) {
+    let progress = nativeTappedAt != null ? Progress_getCurrentProgress(state) : Progress_getProgress(state);
+    if (!progress || !RestEvents_matches(progress, expected)) {
       return;
     }
+    progress = RestEvents_restoreCaptured(
+      progress,
+      nativeRest,
+      nativeTappedAt,
+      !History_isActivelyPaused(progress.intervals)
+    );
     const program = Program_getProgram(state, progress.programId);
     const effects: INativeEffect[] = [];
     const newProgress = Progress_updateTimer(
@@ -773,10 +785,32 @@ export function Thunk_updateTimer(
       setIndex,
       !!skipLiveActivityUpdate,
       state.storage.settings,
-      state.storage.subscription
+      state.storage.subscription,
+      nativeTappedAt
     );
     NativeEffects_apply(env, effects);
-    updateProgress(dispatch, lb<IHistoryRecord>().record(newProgress), "Update rest timer");
+    updateState(dispatch, [Progress_lbProgress(progress.id).record(newProgress)], "Update rest timer");
+  };
+}
+
+export function Thunk_skipRest(expected?: Pick<IRestEvent, "id" | "deadline" | "revision">): IThunk {
+  return async (dispatch, getState, env) => {
+    const state = getState();
+    const current = Progress_getCurrentProgress(state);
+    const progress = current && RestEvents_matches(current, expected) ? current : Progress_getProgress(state);
+    if (
+      !progress ||
+      !RestEvents_matches(progress, expected) ||
+      progress.timer == null ||
+      progress.timerSince == null ||
+      History_clockNow(progress) >= progress.timerSince + progress.timer * 1000
+    ) {
+      return;
+    }
+    const effects: INativeEffect[] = [];
+    const stopped = Progress_stopTimer(effects, progress);
+    NativeEffects_apply(env, effects);
+    updateState(dispatch, [Progress_lbProgress(progress.id).record(stopped)], "Skip matching rest");
   };
 }
 
@@ -1096,7 +1130,7 @@ export function Thunk_playAudioNotification(): IThunk {
   return async (dispatch, getState, env) => {
     if (getState().adminKey == null) {
       const settings = getState().storage.settings;
-      env.audio.play(settings.volume, !!settings.vibration);
+      env.audio.play(settings.volume, !!settings.vibration, "notification", !!settings.ignoreDoNotDisturb);
     }
   };
 }

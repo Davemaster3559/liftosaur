@@ -62,6 +62,7 @@ describe("DevFit schedule and workout presentation", () => {
     record.vtype = "history_record";
     record.entries[0].sets[0].isCompleted = true;
     record.startTime = now - 14 * 86400000;
+    delete record.devfitTrainingDate;
     expect(Schedule_slots(evaluated, settings, [record], now)[2].completed).to.equal(false);
     record.startTime = now;
     expect(Schedule_slots(evaluated, settings, [record], now)[2].completed).to.equal(true);
@@ -71,6 +72,7 @@ describe("DevFit schedule and workout presentation", () => {
     record.vtype = "history_record";
     record.startTime = now;
     for (const entry of record.entries) {
+      delete record.devfitTrainingDate;
       for (const set of entry.sets) {
         set.isCompleted = true;
         if (set.setTimer != null) {
@@ -89,7 +91,7 @@ describe("DevFit schedule and workout presentation", () => {
     expect(summary.planned.running).to.equal(4);
     expect(summary.planned.strength).to.equal(6);
     expect(summary.plannedCardioSeconds).to.equal(224 * 60);
-    const older = { ...record, id: -1, startTime: now - 30 * 86400000 };
+    const older = { ...record, id: -1, startTime: now - 30 * 86400000, devfitTrainingDate: undefined };
     const withPrevious = Analytics_summary([record, older], settings, Stats_getEmpty(), evaluated, now);
     expect(withPrevious.trends.length).to.be.greaterThan(0);
     expect(withPrevious.sets.total).to.equal(24);

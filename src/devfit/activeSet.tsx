@@ -7,24 +7,42 @@ import { InputWeight2 } from "../components/inputWeight2";
 import { WorkoutExerciseSetRpeTime } from "../components/workoutExerciseSetFields";
 import { PlatesBar } from "../components/platesBar";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
-import { Weight_build, Weight_convertTo, Weight_step, Weight_print } from "../models/weight";
+import { Weight_build, Weight_step, Weight_print } from "../models/weight";
+import { IWeight } from "../types";
+import { LiftingUnits_commit, LiftingUnits_convert, LiftingUnits_print } from "./liftingUnits";
+import { Milestones_adjustLoad } from "./milestones";
 import { Exercise_get } from "../models/exercise";
 import { DevFitAction, DevFitSurface, DevFitTag } from "./ui";
 import { Session_kind, Session_minutes } from "./presentation";
 
-export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Element {
+export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps & { loadStep?: IWeight }): JSX.Element {
   const c = Tailwind_semantic().devfit;
   const { set, lastSet } = props;
   const timed = set.setTimer != null;
   const kind = Session_kind(Exercise_get(props.exerciseType, props.settings.exercises).name);
-  const weightUnit = (set.completedWeight ?? set.weight)?.unit ?? props.settings.units;
-  const currentWeightValue = (set.completedWeight ?? set.weight)?.value ?? 0;
+  const originalWeight = set.completedWeight ?? set.weight;
+  const displayWeight = originalWeight && LiftingUnits_convert(originalWeight, "lb");
+  const weightUnit = "lb";
+  const currentWeightValue = displayWeight?.value ?? 0;
   const currentRepsValue = set.completedReps ?? set.reps ?? 0;
   const currentLeftRepsValue = set.completedRepsLeft ?? set.reps ?? 0;
 
   const stepWeight = (direction: -1 | 1): void => {
     props.onBlurWeight(
-      Weight_step(Weight_build(currentWeightValue, weightUnit), direction, props.settings, props.exerciseType)
+      props.loadStep
+        ? Milestones_adjustLoad(
+            originalWeight ?? Weight_build(currentWeightValue, weightUnit),
+            direction,
+            props.loadStep,
+            props.exerciseType,
+            props.settings
+          )
+        : Weight_step(
+            originalWeight ?? Weight_build(currentWeightValue, weightUnit),
+            direction,
+            props.settings,
+            props.exerciseType
+          )
     );
   };
 
@@ -72,7 +90,7 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             <View style={{ flex: 1, minWidth: 135, gap: 8 }}>
               <Text className="text-xs font-bold" style={{ color: c.muted }}>
-                WEIGHT · {weightUnit}
+                WEIGHT · lb{props.exerciseType.equipment === "dumbbell" ? " per dumbbell" : ""}
               </Text>
               <InputWeight2
                 key={weightUnit}
@@ -82,16 +100,22 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
                 showUnitInCorner
                 exerciseType={props.exerciseType}
                 inputCommitMode="blur"
-                onBlur={props.onBlurWeight}
-                onInput={props.onInputWeight}
+                onBlur={(value) => props.onBlurWeight(LiftingUnits_commit(value, originalWeight))}
+                onInput={(value) => props.onInputWeight(LiftingUnits_commit(value, originalWeight))}
                 subscription={props.subscription}
                 placeholder={props.placeholderWeight}
-                initialValue={set.weight}
-                value={set.completedWeight ?? set.weight}
+                initialValue={set.weight && LiftingUnits_convert(set.weight, "lb")}
+                value={displayWeight}
+                units={["lb"]}
                 max={9999}
                 min={-9999}
                 settings={props.settings}
               />
+              {originalWeight && (
+                <Text className="text-xs" style={{ color: c.muted }}>
+                  {LiftingUnits_print(originalWeight, "kg")} equivalent
+                </Text>
+              )}
               <View style={{ flexDirection: "row", gap: 6 }}>
                 <View style={{ flex: 1 }}>
                   <DevFitAction
@@ -187,12 +211,10 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
           )}
           {lastSet?.completedWeight && lastSet.completedReps != null && !set.isCompleted && (
             <DevFitAction
-              label={`Use previous · ${Weight_convertTo(lastSet.completedWeight, set.weight?.unit ?? props.settings.units).value} × ${lastSet.completedReps}`}
+              label={`Use previous · ${LiftingUnits_print(lastSet.completedWeight)} × ${lastSet.completedReps}`}
               secondary
               onPress={() => {
-                props.onBlurWeight(
-                  Weight_convertTo(lastSet.completedWeight!, set.weight?.unit ?? props.settings.units)
-                );
+                props.onBlurWeight(lastSet.completedWeight!);
                 props.onBlurReps(lastSet.completedReps);
                 if (props.isUnilateral) {
                   props.onBlurLeftReps(lastSet.completedRepsLeft);
@@ -212,7 +234,7 @@ export function DevFitActiveSet(props: IWorkoutExerciseSetBodyProps): JSX.Elemen
                 : "Start timer  ▶"
               : props.preserveRest
                 ? "Log set · keep current rest"
-                : "Complete set  ✓"
+                : "Log set  ✓"
         }
         testID={timed && !set.isCompleted ? "start-set-timer" : "complete-set"}
         onPress={props.onCompleteSet}

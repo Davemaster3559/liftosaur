@@ -4,6 +4,7 @@ import { Session_exerciseKind } from "./presentation";
 import { Cardio_breakdown, Cardio_fromSet, Cardio_meters, Cardio_speedKmh, Cardio_entryActivity } from "./cardio";
 import { ICardioActivity, ICardioPhaseSettings } from "./cardioSchema";
 import { Dates_key } from "./dates";
+import { CardioTime_format } from "./cardioTime";
 
 export interface ICardioPoint {
   record: IHistoryRecord;
@@ -185,7 +186,7 @@ export function CardioProgress_compare(previous: ICardioActivity, current: ICard
 
 export function CardioProgress_details(a: ICardioActivity): [string, string][] {
   const b = Cardio_breakdown(a);
-  const min = (seconds?: number): string => (seconds == null ? "Not recorded" : `${+(seconds / 60).toFixed(2)} min`);
+  const min = (seconds?: number): string => (seconds == null ? "Not recorded" : CardioTime_format(seconds));
   const setting = (p?: ICardioPhaseSettings): string =>
     `${p?.speed ? `${p.speed.value} ${p.speed.unit === "mph" ? "mph" : "km/h"}` : "Speed not recorded"} · ${p?.inclinePercent == null ? "grade not recorded" : `${p.inclinePercent.toFixed(1)}%`}`;
   const rows: [string, string][] = [
@@ -229,6 +230,21 @@ export function CardioProgress_details(a: ICardioActivity): [string, string][] {
   }
   if (a.machineProfile) {
     rows.push(["Machine", a.machineProfile]);
+  }
+  if (a.machinePace) {
+    rows.push(["Machine reported pace", `${CardioTime_format(a.machinePace.seconds)} / ${a.machinePace.unit}`]);
+  }
+  if (a.averageHeartRateBpm != null) {
+    rows.push(["Average heart rate", `${a.averageHeartRateBpm} bpm`]);
+  }
+  if (a.machineCaloriesKcal != null) {
+    rows.push(["Machine estimated calories", `${a.machineCaloriesKcal} kcal`]);
+  }
+  for (const [index, block] of (a.machineBlocks ?? []).entries()) {
+    rows.push([
+      `Setting block ${index + 1}`,
+      `${CardioTime_format(block.durationSeconds)}${block.resistanceLevel ? ` · level ${block.resistanceLevel}` : ""}${block.cadenceRpm != null ? ` · ${block.cadenceRpm} RPM` : ""}${block.powerWatts != null ? ` · ${block.powerWatts} W` : ""}${block.stepsPerMinute != null ? ` · ${block.stepsPerMinute} steps/min` : ""}${block.strokeRate != null ? ` · ${block.strokeRate} strokes/min` : ""}${block.notes ? ` · ${block.notes}` : ""}`,
+    ]);
   }
   if (a.notes) {
     rows.push(["Notes", a.notes]);

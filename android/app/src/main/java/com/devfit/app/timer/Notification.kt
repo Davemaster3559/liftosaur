@@ -49,8 +49,17 @@ class Notification(private val context: Context, private val activity: Activity?
         var startedIntents: MutableMap<Int, PendingIntent> = mutableMapOf()
     }
 
-    fun cancel(id: Int) {
+    fun cancel(id: Int, eventId: String? = null, eventRevision: Long? = null) {
+        synchronized(RestCueStore) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        if (id == REST_TIMER_ID) {
+            val token = RestCueStore.pending(context, eventId, eventRevision)
+            if (token != null) {
+                val pending = PendingIntent.getBroadcast(context, token.hashCode(), Intent(context, TimerNotificationPublisher::class.java).setAction("com.devfit.app.REST:$token"), PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
+                pending?.let { alarmManager.cancel(it) }
+            }
+            if (eventId != null) return
+        }
         // setAlarmClock alarms survive process death, but `startedIntents` does not. Rebuild a
         // filterEquals-matching PendingIntent (extras are ignored when matching) so the alarm is
         // cancelled even after a kill/restart wiped the in-memory map; otherwise a stale rest-timer
@@ -63,6 +72,7 @@ class Notification(private val context: Context, private val activity: Activity?
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         )?.let { alarmManager.cancel(it) }
         startedIntents.remove(id)?.let { alarmManager.cancel(it) }
+        }
     }
 
     fun send(
@@ -73,8 +83,13 @@ class Notification(private val context: Context, private val activity: Activity?
         title: String?,
         subtitle: String?,
         body: String?,
-        volume: Float
+        volume: Float,
+        eventId: String? = null,
+        deadline: Long? = null,
+        eventRevision: Long = 0
     ): String? {
+        synchronized(RestCueStore) {
+        if (eventId != null && deadline != null && (RestCueStore.superseded(context, eventId, deadline, eventRevision) || RestCueStore.scheduled(context, eventId, deadline, eventRevision))) return null
         cancel(id)
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -144,15 +159,44 @@ If you don't want that, disable 'Ignore Do Not Disturb' in Settings."""
             putExtra("notificationId", id)
             putExtra("volume", volume)
         }
+        val token = if (id == REST_TIMER_ID && eventId != null && deadline != null) "$eventId:$eventRevision:$deadline" else null
+        if (token != null) {
+            intent.action = "com.devfit.app.REST:$token"
+            intent.putExtra("restToken", token)
+        }
 
         val flags = PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        val pendingIntent = PendingIntent.getBroadcast(context, id, intent, flags)
-        startedIntents[id] = pendingIntent
+        val pendingIntent = PendingIntent.getBroadcast(context, token?.hashCode() ?: id, intent, flags)
+        if (token == null) startedIntents[id] = pendingIntent
 
         val delay = TimeUnit.SECONDS.toMillis(duration)
-        val alarmInfo = AlarmManager.AlarmClockInfo(System.currentTimeMillis() + delay, pendingIntent)
+        val alarmInfo = AlarmManager.AlarmClockInfo(deadline ?: (System.currentTimeMillis() + delay), pendingIntent)
         alarmManager.setAlarmClock(alarmInfo, pendingIntent)
+        if (token != null && eventId != null && deadline != null) {
+            RestCueStore.schedule(context, eventId, deadline, eventRevision)
+            RestCueStore.payload(context, intent.toUri(0))
+        }
         android.util.Log.d("LftTimer", "Notification.send -> scheduled, fires in ${delay}ms id=$id")
         return null
+        }
+    }
+
+    fun adjustRest(eventId: String, expectedDeadline: Long, revision: Long, since: Long, seconds: Int): Boolean {
+        synchronized(RestCueStore) {
+        if (!RestCueStore.matches(context, eventId, expectedDeadline, revision)) return false
+        val raw = RestCueStore.payload(context) ?: return false
+        val previous = try { Intent.parseUri(raw, 0) } catch (_: Exception) { return false }
+        val deadline = since + seconds * 1000L
+        if (deadline <= System.currentTimeMillis()) {
+            cancel(REST_TIMER_ID, eventId, revision)
+            RestCueStore.supersedeCancelled(context, eventId, deadline, revision + 1)
+            return true
+        }
+        send(REST_TIMER_ID, (deadline - System.currentTimeMillis() + 999) / 1000,
+            previous.getBooleanExtra("ignoreDoNotDisturb", false), previous.getBooleanExtra("vibration", false),
+            previous.getStringExtra("title"), previous.getStringExtra("subtitle"), previous.getStringExtra("body"),
+            previous.getFloatExtra("volume", 1f), eventId, deadline, revision + 1)
+        return true
+        }
     }
 }

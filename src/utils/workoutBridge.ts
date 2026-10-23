@@ -18,6 +18,11 @@ export type INativeWorkoutBridgeLiveActivityAction = {
   getReadySince?: number;
   completeSetRequestId?: string;
   phaseId?: string;
+  restEventId?: string;
+  restDeadline?: number;
+  restRevision?: number;
+  restTimer?: number;
+  restTimerSince?: number;
 };
 
 export interface IWorkoutBridge {

@@ -18,6 +18,8 @@ import { DevFitCardioLog } from "./cardioLog";
 import { DevFitField } from "./cardioActivityForm";
 import { Dates_label, Dates_zone } from "./dates";
 import { CardioActions_credit } from "./cardioActions";
+import { TrainingDate_rolloverLabel, TrainingDate_scheduleConfig } from "./trainingDates";
+import { DevFitPlanUpgradePanel } from "./planUpgradePanel";
 
 export function DevFitSchedule(props: {
   program: IProgram;
@@ -27,13 +29,13 @@ export function DevFitSchedule(props: {
   isOngoing: boolean;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
-  const now = useNow();
   const { wide } = useDevFitLayout();
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<number>();
   const [zone, setZone] = useState("");
   const evaluated = useMemo(() => Program_evaluate(props.program, props.settings), [props.program, props.settings]);
   const config = Schedule_get(evaluated, props.settings);
+  const now = useNow(TrainingDate_scheduleConfig(config));
   const slots = useMemo(
     () => Schedule_slots(evaluated, props.settings, props.history, now),
     [evaluated, props.settings, props.history, now]
@@ -71,7 +73,8 @@ export function DevFitSchedule(props: {
         program={props.program}
       />
       <Text style={{ color: c.muted }}>
-        Home calendar: {config.homeTimeZone}. Training dates follow this time zone when you travel.
+        Training day changes at {TrainingDate_rolloverLabel(config.trainingDayRolloverMinutes ?? 0)} ·{" "}
+        {config.homeTimeZone}. This home calendar stays in place when you travel.
       </Text>
       {!config.anchorDate && (
         <DevFitSurface>
@@ -95,6 +98,16 @@ export function DevFitSchedule(props: {
                 save({ ...config, homeTimeZone: zone });
               }
             }}
+          />
+          <DevFitAction
+            label="Night shift · day changes at 3:00 PM"
+            secondary
+            onPress={() => save({ ...config, trainingDayRolloverMinutes: 900 })}
+          />
+          <DevFitAction
+            label="Day changes at midnight"
+            secondary
+            onPress={() => save({ ...config, trainingDayRolloverMinutes: 0 })}
           />
           <Text className="text-sm" style={{ color: c.muted }}>
             Tap a day to assign a session or recovery and mark work / off context. This changes the calendar only.
@@ -130,7 +143,7 @@ export function DevFitSchedule(props: {
                   ) : slot.missed ? (
                     <DevFitTag label="Not logged" />
                   ) : (
-                    slot.isNext && <DevFitTag label="Program pointer" />
+                    editing && slot.isNext && <DevFitTag label="Next session" />
                   )}
                   {slot.context && <DevFitTag label={slot.context === "work" ? "Work" : "Off"} />}
                 </View>
@@ -170,6 +183,13 @@ export function DevFitSchedule(props: {
         ))}
       </View>
       <DevFitSection title="Program tools" detail="Advanced">
+        <DevFitPlanUpgradePanel
+          program={props.program}
+          settings={props.settings}
+          history={props.history}
+          dispatch={props.dispatch}
+          isOngoing={props.isOngoing}
+        />
         <DevFitAction
           label="Edit exercises & progression rules"
           secondary

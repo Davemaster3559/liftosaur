@@ -183,6 +183,7 @@ describe("DevFit v0.4 actual calendar and historical cardio integration", () => 
       const r = Program_nextHistoryRecord({ ...program, nextDay: Number(day) }, settings, stats);
       r.vtype = "history_record";
       r.startTime = Dates_timestamp(String(date), zone);
+      delete r.devfitTrainingDate;
       r.entries[0].sets[0].isCompleted = true;
       return r;
     });
@@ -257,6 +258,8 @@ describe("DevFit v0.4 actual calendar and historical cardio integration", () => 
     expect(s.sets.total).to.equal(0);
     expect(s.completed.running).to.equal(1);
     expect(Cycle_summary([record], settings, stats, History_getPersonalRecords([record]), now).sets.total).to.equal(0);
+    expect(Schedule_slots(evaluated, settings, [record], now)[9].completed).to.equal(false);
+    record.devfitTrainingDate = { source: "training_date", date: "2026-10-16", timeZone: zone, rolloverMinutes: 0 };
     expect(Schedule_slots(evaluated, settings, [record], now)[9].completed).to.equal(true);
     const edited = Cardio_manualRecord(activity({ actualDurationSeconds: 1200 }), [record], settings, now + 1, record);
     expect(edited.id).to.equal(record.id);
@@ -270,9 +273,10 @@ describe("DevFit v0.4 actual calendar and historical cardio integration", () => 
   it("keeps Run B on a Run A date mismatched until explicit credit to one correct scheduled instance", () => {
     const { settings, evaluated, stats, program } = setup();
     const record = Cardio_manualRecord(activity({ runPlan: "run_b" }), [], settings, now);
+    record.devfitTrainingDate = { source: "training_date", date: "2026-10-16", timeZone: zone, rolloverMinutes: 0 };
     let o = Schedule_overview(evaluated, settings, [record], now);
     expect(o.slots[9].completed).to.equal(false);
-    expect(o.slots[9].mismatched[0].dayName).to.equal("Run B");
+    expect(o.slots[9].mismatched[0].dayName).to.equal("Treadmill · Run B");
     record.devfitScheduleCredit = { programId: program.id, scheduledDate: "2026-10-12", rotationDay: 6, programDay: 5 };
     o = Schedule_overview(evaluated, settings, [record], now);
     expect(o.slots[5]).to.include({ completed: true, completedLate: true });
@@ -506,6 +510,7 @@ describe("DevFit v0.4 integration review regressions", () => {
     record.vtype = "history_record";
     record.startTime = now;
     record.id = 800;
+    delete record.devfitTrainingDate;
     record.entries[0].sets = record.entries[0].sets.map((set) =>
       Cardio_mirror(
         { ...set, isCompleted: true },

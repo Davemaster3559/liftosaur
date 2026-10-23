@@ -26,36 +26,24 @@ class TimerNotificationPublisher : BroadcastReceiver() {
     private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onReceive(context: Context, intent: Intent) {
+        val token = intent.getStringExtra("restToken")
+        if (token != null && !RestCueStore.claim(context, token)) return
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val ignoreDoNotDisturb = intent.getBooleanExtra("ignoreDoNotDisturb", false)
         val vibration = intent.getBooleanExtra("vibration", false)
         val volume = intent.getFloatExtra("volume", 1.0f)
 
-        var savedInterruptionFilter: Int? = null
-        if (ignoreDoNotDisturb &&
-            notificationManager.isNotificationPolicyAccessGranted &&
-            notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
-        ) {
-            savedInterruptionFilter = notificationManager.currentInterruptionFilter
-            notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
-        }
+        val mayCue = ignoreDoNotDisturb || notificationManager.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALL
 
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(
-            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+            PowerManager.PARTIAL_WAKE_LOCK,
             "Liftosaur::NotificationWakeLock"
         )
         wakeLock.acquire(5000)
 
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val originalRingerMode = audioManager.ringerMode
-        if (ignoreDoNotDisturb) {
-            try {
-                audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
-            } catch (_: Exception) {}
-        }
-
-        if (volume > 0) requestAudioFocus(audioManager)
+        if (volume > 0 && mayCue) requestAudioFocus(audioManager)
 
         val notificationId = intent.getIntExtra("notificationId", Notification.REST_TIMER_ID)
         val activityIntent = Intent(context, MainActivity::class.java)
@@ -83,22 +71,19 @@ class TimerNotificationPublisher : BroadcastReceiver() {
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_LIGHTS)
-            .setFullScreenIntent(pendingIntent, true)
             .build()
 
-        if (volume > 0) playCustomSound(context, ignoreDoNotDisturb, volume)
-        if (vibration) triggerVibration(context)
+        if (volume > 0 && mayCue) playCustomSound(context, ignoreDoNotDisturb, volume)
+        if (vibration && mayCue) triggerVibration(context)
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
 
         Handler(Looper.getMainLooper()).postDelayed({
             try {
-                if (ignoreDoNotDisturb) audioManager.ringerMode = originalRingerMode
                 if (volume > 0) {
                     releaseAudioFocus(audioManager)
                     stopAlarmSound()
                 }
-                savedInterruptionFilter?.let { notificationManager.setInterruptionFilter(it) }
             } catch (_: Exception) {}
             wakeLock.release()
         }, 4000)
@@ -107,23 +92,24 @@ class TimerNotificationPublisher : BroadcastReceiver() {
     private fun playCustomSound(context: Context, ignoreDoNotDisturb: Boolean, volume: Float) {
         try {
             mediaPlayer?.release()
-            mediaPlayer = MediaPlayer.create(context, R.raw.notif).apply {
+            mediaPlayer = MediaPlayer().apply {
                 val attrs = AudioAttributes.Builder()
-                    .setUsage(if (ignoreDoNotDisturb) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setUsage(if (ignoreDoNotDisturb) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
                     .build()
                 setAudioAttributes(attrs)
+                context.resources.openRawResourceFd(R.raw.notif).use { afd -> setDataSource(afd.fileDescriptor, afd.startOffset, afd.length) }
+                prepare()
                 isLooping = false
                 setVolume(volume, volume)
                 start()
             }
         } catch (e: Exception) {
             try {
-                val defaultSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                val defaultSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 mediaPlayer = MediaPlayer().apply {
                     val attrs = AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setUsage(if (ignoreDoNotDisturb) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                     setAudioAttributes(attrs)
@@ -146,7 +132,7 @@ class TimerNotificationPublisher : BroadcastReceiver() {
 
     private fun requestAudioFocus(audioManager: AudioManager) {
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -158,7 +144,7 @@ class TimerNotificationPublisher : BroadcastReceiver() {
             audioFocusRequest?.let { audioManager.requestAudioFocus(it) }
         } else {
             @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
         }
     }
 

@@ -56,6 +56,7 @@ bikeStairs: Cycling / 1x1 600s|0s
     homeTimeZone: "America/Edmonton",
     referenceSource: "confirmed",
     personalRotation: true,
+    trainingDayRolloverMinutes: 0,
     days: [
       { day: 1, programDay: 1, context: "work" },
       { day: 2, context: "work" },

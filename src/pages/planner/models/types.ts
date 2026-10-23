@@ -10,6 +10,7 @@ import {
 } from "../../../types";
 import { IPlannerSyntaxPointer, PlannerSyntaxError } from "../plannerExerciseEvaluator";
 import { SyntaxNode } from "@lezer/common";
+import type { ICardioPrescription } from "../../../devfit/planSchema";
 import {
   IDayData,
   IPlannerProgram,
@@ -40,6 +41,7 @@ export type IPlannerProgramExerciseWithType = IPlannerProgramExercise &
   Required<Pick<IPlannerProgramExercise, "exerciseType">>;
 
 export type IPlannerProgramExercise = {
+  devfitCardioPrescription?: ICardioPrescription;
   id: string;
   key: string;
   fullName: string;

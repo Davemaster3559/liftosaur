@@ -141,7 +141,8 @@ import {
   Thunk_debugTestLogin,
 } from "./ducks/thunks";
 import { PushRegistration_identityOf } from "./utils/pushRegistration";
-import { History_getGraphsAggregates, History_getHomeAggregates } from "./models/history";
+import { History_getGraphsAggregates, History_getHomeAggregates, History_isPaused } from "./models/history";
+import { RestEvents_ack } from "./devfit/restEvents";
 import { PerfLongTasks_start } from "./utils/perfLongTasks";
 import { usePerfFrameSampling, PerfFrameSampler_flush } from "./utils/perfFrameCallback";
 import { PerfNavTracker_handleStateChange } from "./utils/perfNavTracker";
@@ -451,13 +452,29 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
     if (Platform.OS !== "android") {
       return;
     }
-    return env.timer.subscribeOnScheduled(() => {
-      if (Progress_getCurrentProgress(stateRef.current)?.ui) {
+    return env.timer.subscribeOnScheduled((event) => {
+      const progress = Progress_getCurrentProgress(stateRef.current);
+      const rest = progress?.devfitRestEvent;
+      const acknowledgement = RestEvents_ack(
+        rest,
+        event,
+        Date.now(),
+        !!progress && !History_isPaused(progress.intervals) && AppState.currentState === "active"
+      );
+      if (acknowledgement.event) {
         updateState(
           dispatch,
-          [Progress_lbProgress().pi("ui", {}).p("nativeNotificationScheduled").record(true)],
+          [Progress_lbProgress(0).p("devfitRestEvent").record(acknowledgement.event)],
           "Set native notification scheduled"
         );
+        if (acknowledgement.notify) {
+          env.audio.play(
+            stateRef.current.storage.settings.volume,
+            !!stateRef.current.storage.settings.vibration,
+            "notification",
+            !!stateRef.current.storage.settings.ignoreDoNotDisturb
+          );
+        }
       }
     });
   }, [dispatch, env]);
@@ -514,12 +531,33 @@ export function AppRoot(props: { initialState: IState; env: IEnv }): React.JSX.E
         if (progress == null) {
           return;
         }
-        const { timer, timerSince } = progress;
+        const timer = progress.timer ?? event.restTimer;
+        const timerSince = progress.timerSince ?? event.restTimerSince;
         if (timer == null || timerSince == null) {
           return;
         }
         const addSeconds = event.addSeconds ?? 0;
-        dispatch(Thunk_updateTimer(Math.max(0, timer + addSeconds), entryIndex, setIndex, false));
+        if (
+          !event.restEventId ||
+          progress.devfitRestEvent?.id !== event.restEventId ||
+          progress.devfitRestEvent.deadline !== event.restDeadline ||
+          (progress.devfitRestEvent.revision ?? 0) !== (event.restRevision ?? 0)
+        ) {
+          return;
+        }
+        dispatch(
+          Thunk_updateTimer(
+            Math.max(0, timer + addSeconds),
+            entryIndex,
+            setIndex,
+            false,
+            progress.devfitRestEvent,
+            event.tappedAt,
+            event.restTimer != null && event.restTimerSince != null
+              ? { timer: event.restTimer, timerSince: event.restTimerSince }
+              : undefined
+          )
+        );
       } else if (event.action === "recordSetTimer") {
         dispatch(Thunk_recordSetTimer(entryIndex, setIndex, !!event.keepTiming, event.elapsedSeconds, event.phaseId));
       } else if (event.action === "startSetTimerWork") {

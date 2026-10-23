@@ -6,6 +6,9 @@ import { ICardioPoint, CardioProgress_details } from "./cardioProgress";
 import { Cardio_name } from "./cardio";
 import { Dates_label } from "./dates";
 import { DevFitAction, DevFitSurface, DevFitTitle } from "./ui";
+import { IDispatch } from "../ducks/types";
+import { DevFitTrainingDateChoice } from "./trainingDateChoice";
+import { CardioTime_format } from "./cardioTime";
 
 export function DevFitCardioRecordCard(props: {
   point: ICardioPoint;
@@ -14,6 +17,7 @@ export function DevFitCardioRecordCard(props: {
   onDelete: () => void;
   onCredit?: () => void;
   onRemoveCredit: () => void;
+  dispatch?: IDispatch;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
   const p = props.point;
@@ -36,9 +40,11 @@ export function DevFitCardioRecordCard(props: {
           <Text style={{ color: c.ink }}>{value}</Text>
         </View>
       ))}
+      {props.dispatch && <DevFitTrainingDateChoice record={p.record} dispatch={props.dispatch} />}
       {p.activity.segments?.map((s, i) => (
         <Text key={i} style={{ color: c.muted }}>
-          {i + 1}. {s.phase} · {+(s.durationSeconds / 60).toFixed(2)} min
+          {i + 1}. {s.phase} · {CardioTime_format(s.durationSeconds)}
+          {s.breakBefore ? " · after pause" : ""}
           {s.speed ? ` · ${s.speed.value} ${s.speed.unit}` : ""}
           {s.inclinePercent != null ? ` · ${s.inclinePercent.toFixed(1)}%` : ""}
         </Text>

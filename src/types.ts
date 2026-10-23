@@ -2,6 +2,16 @@
 import * as v from "valibot";
 import { IVersions, IVersionTypes } from "./models/versionTracker/types";
 import { IEquals } from "./utils/types";
+import { ITrainingDate, VTrainingDate } from "./devfit/trainingDates";
+import { IRestEvent, VRestEvent } from "./devfit/restEvents";
+import {
+  IDevFitPlan,
+  VDevFitPlan,
+  IMilestoneSnapshot,
+  VMilestoneSnapshot,
+  ICardioPrescription,
+  VCardioPrescription,
+} from "./devfit/planSchema";
 import {
   ICardioActivity,
   IScheduleCredit,
@@ -174,6 +184,8 @@ export const exerciseTypes = [
   "squatRow",
   "standingCalfRaise",
   "stationaryBike",
+  "stairClimber",
+  "otherCardio",
   "stepUp",
   "stiffLegDeadlift",
   "straightLegDeadlift",
@@ -568,6 +580,9 @@ export interface IHistoryEntry {
   exercise: IExerciseType;
   sets: ISet[];
   devfitCardioDetails?: ICardioEntryDetails;
+  devfitCardioPrescription?: ICardioPrescription;
+  devfitCardioRequiredSetIds?: string[];
+  devfitMilestone?: IMilestoneSnapshot;
   warmupSets: ISet[];
   index: number;
   id: string;
@@ -587,6 +602,9 @@ const _VHistoryEntry = v.object({
   exercise: VExerciseType,
   sets: v.array(VSet),
   devfitCardioDetails: v.optional(VCardioEntryDetails),
+  devfitCardioPrescription: v.optional(VCardioPrescription),
+  devfitCardioRequiredSetIds: v.optional(v.array(v.string())),
+  devfitMilestone: v.optional(VMilestoneSnapshot),
   warmupSets: v.array(VSet),
   index: v.number(),
   id: v.string(),
@@ -990,6 +1008,8 @@ export interface IHistoryRecord {
   day: number;
   catchUpFor?: string;
   devfitScheduleCredit?: IScheduleCredit;
+  devfitTrainingDate?: ITrainingDate;
+  devfitRequiredEntries?: string[];
   dayName: string;
   entries: IHistoryEntry[];
   startTime: number;
@@ -1003,6 +1023,7 @@ export interface IHistoryRecord {
   userPromptedStateVars?: Record<string, IProgramState | undefined>;
   changes?: IHistoryRecordChange[];
   timerSince?: number;
+  devfitRestEvent?: IRestEvent;
   timerMode?: IProgressMode;
   timer?: number;
   timerEntryIndex?: number;
@@ -1065,6 +1086,8 @@ const _VHistoryRecord = v.object({
   day: v.number(),
   catchUpFor: v.optional(v.string()),
   devfitScheduleCredit: v.optional(VScheduleCredit),
+  devfitTrainingDate: v.optional(VTrainingDate),
+  devfitRequiredEntries: v.optional(v.array(v.string())),
   dayName: v.string(),
   entries: v.array(VHistoryEntry),
   startTime: v.number(),
@@ -1078,6 +1101,7 @@ const _VHistoryRecord = v.object({
   userPromptedStateVars: v.optional(v.record(v.string(), v.optional(VProgramState))),
   changes: v.optional(v.array(VHistoryRecordChange)),
   timerSince: v.optional(v.number()),
+  devfitRestEvent: v.optional(VRestEvent),
   timerMode: v.optional(VProgressMode),
   timer: v.optional(v.number()),
   timerEntryIndex: v.optional(v.number()),
@@ -1222,6 +1246,7 @@ export const VPlannerProgram: v.GenericSchema<IPlannerProgram> = _VPlannerProgra
 
 export interface IProgram {
   vtype: "program";
+  devfitPlan?: IDevFitPlan;
   exercises: IProgramExercise[];
   id: string;
   name: string;
@@ -1242,6 +1267,7 @@ export interface IProgram {
 }
 const _VProgram = v.object({
   vtype: v.literal("program"),
+  devfitPlan: v.optional(VDevFitPlan),
   exercises: v.array(VProgramExercise),
   id: v.string(),
   name: v.string(),
@@ -1648,6 +1674,7 @@ export const VDevFitSchedule = v.object({
   homeTimeZone: v.optional(v.string()),
   referenceSource: v.optional(v.picklist(["confirmed", "personal_oct7"])),
   personalRotation: v.optional(v.boolean()),
+  trainingDayRolloverMinutes: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1439))),
   days: v.array(
     v.object({
       day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(60)),
@@ -2047,7 +2074,7 @@ export const CONTROLLED_TYPES = ["program", "gym", "progress", "history_entry"] 
 export type IControlledType = (typeof CONTROLLED_TYPES)[number];
 
 export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
-  program: ["name", "nextDay", "planner"] as const,
+  program: ["name", "nextDay", "planner", "devfitPlan"] as const,
   gym: ["name", "equipment"] as const,
   progress: [
     "entries",
@@ -2059,6 +2086,7 @@ export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
     "updatedAt",
     "changes",
     "timerSince",
+    "devfitRestEvent",
     "timerMode",
     "timer",
     "timerEntryIndex",
@@ -2068,9 +2096,14 @@ export const CONTROLLED_FIELDS: Record<IControlledType, readonly string[]> = {
     "amrapModal",
     "currentEntryIndex",
     "devfitScheduleCredit",
+    "devfitTrainingDate",
+    "devfitRequiredEntries",
   ] as const,
   history_entry: [
     "devfitCardioDetails",
+    "devfitCardioPrescription",
+    "devfitCardioRequiredSetIds",
+    "devfitMilestone",
     "exercise",
     "sets",
     "warmupSets",

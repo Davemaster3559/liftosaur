@@ -121,6 +121,7 @@ describe("DevFit redesigned native flows", () => {
       await app.press("start-set-timer");
       await app.settle();
       expect(screen.getByTestId("devfit-cardio-timer")).toBeTruthy();
+      await fireEvent.press(screen.getByRole("button", { name: "Session briefing & progression" }));
       expect(screen.getByTestId("devfit-cardio-coaching-card")).toBeTruthy();
       if (screen.queryByTestId("set-timer-start-now")) {
         await app.press("set-timer-start-now");

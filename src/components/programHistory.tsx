@@ -19,6 +19,9 @@ import { useTrackedState } from "../navigation/TrackedStateContext";
 import { HistoryRecordView } from "./historyRecord";
 import { Program_evaluate, Program_getProgramDay } from "../models/program";
 import { DevFitCycleCard } from "../devfit/cycleCard";
+import { Schedule_get } from "../devfit/schedule";
+import { TrainingDate_scheduleConfig } from "../devfit/trainingDates";
+import { useNow } from "../utils/useNow";
 
 interface IProps {
   program: IProgram;
@@ -41,6 +44,8 @@ export function getWeekHistory(
 
 export function ProgramHistoryView(props: IProps): JSX.Element {
   const dispatch = props.dispatch;
+  const cycleSchedule = Schedule_get(Program_evaluate(props.program, props.settings), props.settings);
+  const now = useNow(TrainingDate_scheduleConfig(cycleSchedule));
   const aggregates = useTimedMemo(
     "programHistory.aggregates",
     () => History_getHomeAggregates(props.history, !!props.settings.startWeekFromMonday),
@@ -201,8 +206,15 @@ export function ProgramHistoryView(props: IProps): JSX.Element {
     <View className="flex-1">
       {stickyHeader}
       <LegendList
-        ListHeaderComponent={<DevFitCycleCard history={props.history} settings={props.settings}
-          stats={props.navCommon.stats} prs={prs} now={Date.now()} />}
+        ListHeaderComponent={
+          <DevFitCycleCard
+            history={props.history}
+            settings={{ ...props.settings, devfitSchedules: { [props.program.id]: cycleSchedule } }}
+            stats={props.navCommon.stats}
+            prs={prs}
+            now={now}
+          />
+        }
         key={listRemountKey}
         ref={flatListRef}
         data={sortedHistory}

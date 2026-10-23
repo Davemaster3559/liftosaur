@@ -4,7 +4,7 @@ import { ITimerBridge } from "../utils/timerBridge";
 export type ISoundName = "notification" | "set-timer-end" | "get-ready-end";
 
 export interface IAudioInterface {
-  play(volume: number, vibration: boolean, sound?: ISoundName): void;
+  play(volume: number, vibration: boolean, sound?: ISoundName, ignoreDoNotDisturb?: boolean): void;
 }
 
 export class MockAudioInterface implements IAudioInterface {
@@ -16,10 +16,15 @@ export class MockAudioInterface implements IAudioInterface {
 export class AudioInterface implements IAudioInterface {
   constructor(private readonly timer: ITimerBridge) {}
 
-  public play(volume: number, vibration: boolean, sound: ISoundName = "notification"): void {
+  public play(
+    volume: number,
+    vibration: boolean,
+    sound: ISoundName = "notification",
+    ignoreDoNotDisturb = false
+  ): void {
     if (volume <= 0 && !vibration) {
       return;
     }
-    this.timer.playSound(volume, vibration, sound);
+    this.timer.playSound(volume, vibration, sound, ignoreDoNotDisturb);
   }
 }

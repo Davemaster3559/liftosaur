@@ -8,6 +8,8 @@ import {
 } from "../models/program";
 import { History_createCustomEntry } from "../models/history";
 import { Exercise_get } from "../models/exercise";
+import { TrainingDate_scheduleConfig, TrainingDate_start } from "./trainingDates";
+import { Schedule_get } from "./schedule";
 
 export function CatchUp_build(
   program: IEvaluatedProgram,
@@ -61,6 +63,7 @@ export function CatchUp_build(
     programName: "DevFit catch-up",
     dayName: "Full-Body Catch-Up",
     catchUpFor: program.id,
+    devfitTrainingDate: TrainingDate_start(Date.now(), TrainingDate_scheduleConfig(Schedule_get(program, settings))),
     entries: result,
   };
 }

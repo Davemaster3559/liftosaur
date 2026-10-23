@@ -2,7 +2,8 @@ import { IHistoryRecord, ISettings, IStats } from "../types";
 import { IEvaluatedProgram, Program_getProgramExercise } from "../models/program";
 import { History_getPersonalRecords } from "../models/history";
 import { Cycle_range, Cycle_records, Cycle_summary } from "./cycle";
-import { Schedule_get, Schedule_slots } from "./schedule";
+import { Schedule_get, Schedule_slotsForDate } from "./schedule";
+import { Dates_add } from "./dates";
 import { ISessionKind, Session_exerciseKind, Session_setDuration } from "./presentation";
 import { PlannerProgramExercise_currentEvaluatedSetVariation } from "../pages/planner/models/plannerProgramExercise";
 
@@ -18,6 +19,8 @@ export function Analytics_summary(
   cardioSeconds: number;
   plannedCardioSeconds: number;
   calendarCycleDays?: number;
+  attendedSlots: number;
+  plannedSlots: number;
 } {
   const cycleDays = settings.devfitCycleDays ?? (program ? Schedule_get(program, settings).cycleDays : 14);
   const cycleSettings = {
@@ -25,7 +28,8 @@ export function Analytics_summary(
     devfitCycleDays: cycleDays,
     devfitSchedules: program ? { [program.id]: Schedule_get(program, settings) } : settings.devfitSchedules,
   };
-  const records = Cycle_records(history, Cycle_range(cycleSettings, now));
+  const range = Cycle_range(cycleSettings, now);
+  const records = Cycle_records(history, range);
   const completed = { strength: 0, running: 0, cardio: 0 };
   let cardioSeconds = 0;
   let plannedCardioSeconds = 0;
@@ -58,10 +62,20 @@ export function Analytics_summary(
     return { ...record, entries };
   });
   const planned = { strength: 0, running: 0, cardio: 0 };
+  let attendedSlots = 0;
+  let plannedSlots = 0;
   if (program) {
-    for (const slot of Schedule_slots(program, settings, [], now)) {
-      if (!slot.session) {
+    const slots = Array.from({ length: range.days }, (_, i) => {
+      const date = Dates_add(range.startDate!, i);
+      return Schedule_slotsForDate(program, cycleSettings, history, date, now).find((slot) => slot.dateKey === date);
+    });
+    for (const slot of slots) {
+      if (!slot?.session || slot.session.kind === "recovery") {
         continue;
+      }
+      plannedSlots += 1;
+      if (slot.completed) {
+        attendedSlots += 1;
       }
       const kinds = new Set(slot.session.exercises.map((e) => Session_exerciseKind(e)));
       for (const kind of kinds) {
@@ -91,5 +105,7 @@ export function Analytics_summary(
     cardioSeconds,
     plannedCardioSeconds,
     calendarCycleDays: program ? Schedule_get(program, settings).cycleDays : undefined,
+    attendedSlots,
+    plannedSlots,
   };
 }

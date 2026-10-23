@@ -60,6 +60,10 @@ export function Session_exerciseKind(
   settings?: ISettings
 ): ISessionKind {
   const cardio = entry?.sets.find((s) => s.devfitCardio)?.devfitCardio;
+  const prescription = entry?.devfitCardioPrescription ?? exercise?.devfitCardioPrescription;
+  if (prescription) {
+    return prescription.intention === "run_a" || prescription.intention === "run_b" ? "running" : "cardio";
+  }
   const name = exercise?.name ?? (entry && settings ? Exercise_get(entry.exercise, settings.exercises).name : "");
   const classified = Session_kind(name, [exercise?.label ?? "", ...(entry?.sets.map((s) => s.label ?? "") ?? [])]);
   if (cardio) {

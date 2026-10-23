@@ -11,6 +11,19 @@ import {
   Exercise_fullName,
 } from "./exercise";
 import { ScriptRunner } from "../parser";
+import { TrainingDate_config, TrainingDate_start } from "../devfit/trainingDates";
+import { Rotation_roles } from "../devfit/rotationIdentity";
+import { IDevFitPlan } from "../devfit/planSchema";
+import { Cardio_exerciseId } from "../devfit/cardio";
+import { PlannerIds_preserve } from "../devfit/plannerIds";
+import { CardioProgression_holdReason } from "../devfit/cardioProgression";
+import {
+  Milestones_availableLoad,
+  Milestones_decision,
+  Milestones_evaluate,
+  Milestones_snapshot,
+  Milestones_workoutComplete,
+} from "../devfit/milestones";
 import { Dialog_alert } from "../utils/dialog";
 import {
   IScriptBindings,
@@ -174,6 +187,7 @@ export interface IEvaluatedProgram {
   errors: IEvaluatedProgramError[];
   weeks: IEvaluatedProgramWeek[];
   states: IByTag<IProgramState>;
+  devfitPlan?: IDevFitPlan;
 }
 export type IEProgram = IProgram | IEvaluatedProgram;
 
@@ -290,7 +304,10 @@ export function Program_nextHistoryEntry(
   stats: IStats,
   settings: ISettings
 ): IHistoryEntry {
-  const exercise = programExercise.exerciseType;
+  const prescription = program.devfitPlan?.cardio[programExercise.key];
+  const exercise = prescription
+    ? { id: Cardio_exerciseId(prescription.machine), equipment: "leverageMachine" as const }
+    : programExercise.exerciseType;
   const programSets = PlannerProgramExercise_currentEvaluatedSetVariation(programExercise)?.sets;
   const warmupSets = PlannerProgramExercise_programWarmups(programExercise, settings);
   const sets: ISet[] = [];
@@ -322,7 +339,7 @@ export function Program_nextHistoryEntry(
     });
   }
 
-  const entry: IHistoryEntry = {
+  let entry: IHistoryEntry = {
     vtype: "history_entry",
     id: Progress_getEntryId(exercise, programExercise.label),
     index,
@@ -331,13 +348,27 @@ export function Program_nextHistoryEntry(
     sets,
     superset: programExercise.superset?.name,
     warmupSets: Exercise_getWarmupSets(exercise, sets[0]?.weight, settings, warmupSets),
+    devfitCardioPrescription: program.devfitPlan?.cardio[programExercise.key],
   };
   try {
-    return Progress_runUpdateScriptForEntry(entry, dayData, programExercise, program.states, -1, settings, stats);
+    entry = Progress_runUpdateScriptForEntry(entry, dayData, programExercise, program.states, -1, settings, stats);
   } catch (error) {
     console.error(error);
-    return entry;
   }
+  const target = program.devfitPlan?.targets[programExercise.key];
+  if (prescription) {
+    entry.devfitCardioRequiredSetIds = entry.sets.filter((_, i) => !programSets[i]?.isQuickAddSet).map((s) => s.id);
+  }
+  if (target) {
+    entry.sets = entry.sets.map((s) => ({ ...s, weight: { ...target.weight }, reps: target.reps, minReps: undefined }));
+    entry.devfitMilestone = Milestones_snapshot(
+      entry,
+      programExercise.key,
+      target,
+      entry.sets.filter((_, i) => programSets[i]?.isQuickAddSet).map((s) => s.id)
+    );
+  }
+  return entry;
 }
 
 export function Program_stateValue(
@@ -415,8 +446,35 @@ export function Program_nextHistoryRecordFromEvaluated(
     dayInWeek,
     dayName: fullDayName,
     startTime: now,
+    devfitTrainingDate: TrainingDate_start(
+      now,
+      TrainingDate_config(
+        settings,
+        program.id,
+        !!Rotation_roles(
+          Program_getListOfDays(program).map(([id, name]) => ({
+            day: Number(id),
+            name,
+            details: Program_getProgramDay(program, Number(id))
+              ?.exercises.map((e) => e.label || e.name)
+              .join(" "),
+          }))
+        )
+      )
+    ),
     updatedAt: now,
     entries,
+    devfitRequiredEntries: program.devfitPlan
+      ? entries
+          .filter((e) =>
+            e.devfitMilestone
+              ? e.devfitMilestone.required.length > 0
+              : e.devfitCardioRequiredSetIds
+                ? e.devfitCardioRequiredSetIds.length > 0
+                : e.sets.length > 0
+          )
+          .map((e) => e.id)
+      : undefined,
     ui: {},
   };
 }
@@ -656,6 +714,9 @@ export function Program_runAllFinishDayScripts(
 ): { program: IProgram; exerciseData: IExerciseData } {
   const exerciseData: IExerciseData = {};
   const newEvaluatedProgram = Program_forceEvaluate(program, settings);
+  const targets = program.devfitPlan ? { ...program.devfitPlan.targets } : undefined;
+  const workoutComplete = Milestones_workoutComplete(progress);
+  const counted = new Set<string>();
   const dayData = Progress_getDayData(progress);
   const programDay = Program_getProgramDay(newEvaluatedProgram, progress.day);
   if (!programDay) {
@@ -668,6 +729,20 @@ export function Program_runAllFinishDayScripts(
           ? Program_getProgramExerciseForKeyAndDay(newEvaluatedProgram, dayData.day, entry.programExerciseId)
           : undefined;
       if (programExercise) {
+        const target = targets?.[programExercise.key];
+        if (target) {
+          if (workoutComplete && !counted.has(programExercise.key)) {
+            targets![programExercise.key] = Milestones_decision(progress, entry, target, settings).target;
+            counted.add(programExercise.key);
+          }
+          continue;
+        }
+        if (
+          program.devfitPlan &&
+          (!workoutComplete || CardioProgression_holdReason(progress, entry, programExercise, settings))
+        ) {
+          continue;
+        }
         const newStateResult = Program_runFinishDayScript(
           programExercise,
           newEvaluatedProgram,
@@ -713,6 +788,12 @@ export function Program_runAllFinishDayScripts(
   const newProgram = ObjectUtils_clone(program);
   newProgram.nextDay = theNextDay;
   newProgram.planner = newPlanner;
+  if (newProgram.devfitPlan) {
+    PlannerIds_preserve(program.planner, newPlanner);
+  }
+  if (newProgram.devfitPlan && targets) {
+    newProgram.devfitPlan = { ...newProgram.devfitPlan, targets };
+  }
 
   return {
     program: newProgram,
@@ -960,7 +1041,24 @@ function Program_buildEvaluatedProgram(
   planner: IPlannerProgram,
   evaluatedWeeks: IPlannerEvalResult[][]
 ): IEvaluatedProgram {
-  const { weeks, errors } = Program_buildWeeks(planner, evaluatedWeeks);
+  const built = Program_buildWeeks(planner, evaluatedWeeks);
+  const weeks = program.devfitPlan ? ObjectUtils_clone(built.weeks) : built.weeks;
+  const errors = built.errors;
+  if (program.devfitPlan) {
+    PP_iterate2(weeks, (exercise) => {
+      const target = program.devfitPlan?.targets[exercise.key];
+      exercise.devfitCardioPrescription = program.devfitPlan?.cardio[exercise.key];
+      if (target) {
+        for (const variation of exercise.evaluatedSetVariations) {
+          for (const set of variation.sets) {
+            set.maxrep = target.reps;
+            set.minrep = undefined;
+            set.weight = { ...target.weight };
+          }
+        }
+      }
+    });
+  }
   const states: IByTag<IProgramState> = {};
   PP_iterate(evaluatedWeeks, (exercise) => {
     for (const tag of exercise.tags) {
@@ -976,6 +1074,7 @@ function Program_buildEvaluatedProgram(
     nextDay: program.nextDay,
     weeks,
     states,
+    devfitPlan: program.devfitPlan,
   };
 }
 
@@ -1194,6 +1293,9 @@ export function Program_applyEvaluatedProgram(
 ): IProgram {
   const newProgram = ObjectUtils_clone(program);
   newProgram.planner = new ProgramToPlanner(evaluatedProgram, settings).convertToPlanner();
+  if (newProgram.devfitPlan) {
+    PlannerIds_preserve(program.planner, newProgram.planner);
+  }
   newProgram.nextDay = evaluatedProgram.nextDay;
   return newProgram;
 }
@@ -1659,6 +1761,16 @@ export function Program_computeProgressStateChanges(
   stats: IStats,
   userPromptedStateVars?: IProgramState
 ): IProgressStateChanges | undefined {
+  const milestone = program.devfitPlan?.targets[programExercise.key];
+  if (milestone) {
+    const result = Milestones_evaluate(
+      entry,
+      milestone,
+      "preview",
+      Milestones_availableLoad(milestone, entry.exercise, settings)
+    );
+    return { diffState: { target: result.reason }, diffVars: {}, prints: [] };
+  }
   const state = PlannerProgramExercise_getState(programExercise);
   const result = Program_runExerciseFinishDayScript(
     entry,

@@ -1,4 +1,4 @@
-import { JSX } from "react";
+import { JSX, useState } from "react";
 import { View } from "react-native";
 import { Text } from "../components/primitives/text";
 import { IHistoryEntry, ISettings } from "../types";
@@ -16,6 +16,7 @@ import {
 import { DevFitAction, DevFitBar, DevFitSurface, DevFitTag } from "./ui";
 import { DevFitPhaseControls } from "./phaseControls";
 import { ICardioPhaseSettings } from "./cardioSchema";
+import { Cardio_prescriptionName } from "./cardio";
 
 export function DevFitCardioTimer(props: {
   entry: IHistoryEntry;
@@ -39,6 +40,7 @@ export function DevFitCardioTimer(props: {
   onBeginPhase?: (phase: "walk" | "jog") => void;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
+  const [briefing, setBriefing] = useState(false);
   const scale = useRemScale();
   const ready = props.readySeconds != null;
   const remaining = Math.max(0, props.target - props.elapsedSeconds);
@@ -57,7 +59,9 @@ export function DevFitCardioTimer(props: {
       />
       {props.sideLabel && <DevFitTag label={props.sideLabel} />}
       <Text className="text-2xl font-bold" style={{ color: c.ink }}>
-        {Session_displayName(props.exercise?.label || props.exercise?.name || "Your cardio session")}
+        {props.entry.devfitCardioPrescription
+          ? Cardio_prescriptionName(props.entry.devfitCardioPrescription)
+          : Session_displayName(props.exercise?.label || props.exercise?.name || "Your cardio session")}
       </Text>
       <View style={{ alignItems: "center", paddingVertical: 8, gap: 8 }}>
         <Text
@@ -91,21 +95,6 @@ export function DevFitCardioTimer(props: {
         <DevFitAction label="Start now" testID="set-timer-start-now" onPress={props.onStart} />
       ) : (
         <>
-          {(!props.completed || props.nextSide || set.devfitCardio) && (
-            <DevFitAction
-              label={props.nextSide ? "Next side →" : `Stop & record · ${Session_minutes(props.elapsedSeconds)}`}
-              testID="set-timer-stop-record"
-              onPress={props.onRecord}
-            />
-          )}
-          {!props.completed && (
-            <DevFitAction
-              label="Record time, keep going"
-              testID="set-timer-log-keep"
-              secondary
-              onPress={props.onKeepTiming}
-            />
-          )}
           {showPhase && phaseUnknown && props.onBeginPhase && (
             <View style={{ gap: 8 }}>
               <DevFitAction label="This work segment is walk" secondary onPress={() => props.onBeginPhase!("walk")} />
@@ -131,29 +120,51 @@ export function DevFitCardioTimer(props: {
               onConfirm={props.onPhaseSettings}
             />
           )}
+          {(!props.completed || props.nextSide || set.devfitCardio) && (
+            <DevFitAction
+              label={props.nextSide ? "Next side →" : `Finish activity · ${Session_minutes(props.elapsedSeconds)}`}
+              testID="set-timer-stop-record"
+              onPress={props.onRecord}
+            />
+          )}
+          {!props.completed && (
+            <DevFitAction
+              label="Record time, keep going"
+              testID="set-timer-log-keep"
+              secondary
+              onPress={props.onKeepTiming}
+            />
+          )}
         </>
       )}
-      <DevFitSurface testID="devfit-cardio-coaching-card">
-        {coaching.instructions && <Text style={{ color: c.ink }}>{coaching.instructions}</Text>}
-        {[
-          ["WARM-UP", coaching.warmup],
-          ["MAIN TARGET", coaching.mainTarget],
-          ["RECOVERY", coaching.recovery],
-          ["THEN", coaching.then],
-          ["PROGRESSION", coaching.progressionRule],
-        ].map(([label, value]) =>
-          value ? (
-            <View key={label} style={{ gap: 4 }}>
-              <Text className="text-xs font-bold" style={{ color: c.cardio }}>
-                {label}
-              </Text>
-              <Text className="text-sm" style={{ color: c.ink }}>
-                {value}
-              </Text>
-            </View>
-          ) : null
-        )}
-      </DevFitSurface>
+      <DevFitAction
+        secondary
+        label={briefing ? "Close session briefing" : "Session briefing & progression"}
+        onPress={() => setBriefing(!briefing)}
+      />
+      {briefing && (
+        <DevFitSurface testID="devfit-cardio-coaching-card">
+          {coaching.instructions && <Text style={{ color: c.ink }}>{coaching.instructions}</Text>}
+          {[
+            ["WARM-UP", coaching.warmup],
+            ["MAIN TARGET", coaching.mainTarget],
+            ["RECOVERY", coaching.recovery],
+            ["THEN", coaching.then],
+            ["PROGRESSION", coaching.progressionRule],
+          ].map(([label, value]) =>
+            value ? (
+              <View key={label} style={{ gap: 4 }}>
+                <Text className="text-xs font-bold" style={{ color: c.cardio }}>
+                  {label}
+                </Text>
+                <Text className="text-sm" style={{ color: c.ink }}>
+                  {value}
+                </Text>
+              </View>
+            ) : null
+          )}
+        </DevFitSurface>
+      )}
       <Text className="text-xs" style={{ color: c.muted }}>
         {Session_minutes(timing.work)} work
         {timing.rest > 0 ? ` + ${Session_minutes(timing.rest)} recovery between segments` : ""} ·{" "}

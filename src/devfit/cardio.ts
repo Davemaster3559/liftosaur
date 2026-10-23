@@ -10,6 +10,8 @@ import {
 } from "./cardioSchema";
 import { Dates_key, Dates_timestamp, Dates_zone, Dates_validTime } from "./dates";
 import { Weight_build } from "../models/weight";
+import { ITrainingDate, TrainingDate_changedStart, TrainingDate_start, VTrainingDate } from "./trainingDates";
+import { ICardioPrescription } from "./planSchema";
 
 export const CARDIO_NAMES: Record<ICardioActivity["kind"], string> = {
   treadmill: "Treadmill",
@@ -21,11 +23,33 @@ export const CARDIO_NAMES: Record<ICardioActivity["kind"], string> = {
 };
 
 export function Cardio_name(activity: ICardioActivity): string {
-  return activity.runPlan === "run_a"
-    ? "Run A"
-    : activity.runPlan === "run_b"
-      ? "Run B"
-      : activity.activityName || CARDIO_NAMES[activity.kind];
+  return (
+    activity.activityName ||
+    Cardio_prescriptionName({ machine: activity.kind, intention: activity.intention ?? activity.runPlan ?? "general" })
+  );
+}
+
+export function Cardio_prescriptionName(prescription: Pick<ICardioPrescription, "machine" | "intention">): string {
+  const intention = {
+    run_a: "Run A",
+    run_b: "Run B",
+    incline_walk: "Incline walk",
+    endurance: "Endurance",
+    recovery: "Recovery",
+    general: "",
+  }[prescription.intention];
+  return `${CARDIO_NAMES[prescription.machine]}${intention ? ` · ${intention}` : ""}`;
+}
+
+export function Cardio_exerciseId(machine: ICardioActivity["kind"]): string {
+  return {
+    treadmill: "inclineTreadmillWalk",
+    stationary_bike: "stationaryBike",
+    rowing: "rowing",
+    elliptical: "ellipticalMachine",
+    stair_climber: "stairClimber",
+    other: "otherCardio",
+  }[machine];
 }
 
 export function Cardio_speedKmh(speed: { value: number; unit: "mph" | "kmh" }): number {
@@ -55,6 +79,9 @@ export function Cardio_breakdown(
   let longestJogSeconds = 0;
   let uninterrupted = 0;
   for (const s of activity.segments) {
+    if (s.breakBefore) {
+      uninterrupted = 0;
+    }
     if (s.phase === "walk") {
       walkSeconds += s.durationSeconds;
     }
@@ -85,12 +112,41 @@ export function Cardio_segments(laps: ISet["cardioLaps"], seconds: number): ICar
     return undefined;
   }
   const boundaries = laps[0].elapsedSeconds === 0 ? laps : [{ phase: "walk" as const, elapsedSeconds: 0 }, ...laps];
+  let pendingBreak = false;
   return boundaries.flatMap((l, i) => {
+    pendingBreak = pendingBreak || !!l.breakBefore;
     const durationSeconds = (boundaries[i + 1]?.elapsedSeconds ?? seconds) - l.elapsedSeconds;
-    return durationSeconds > 0
-      ? [{ phase: l.phase, durationSeconds, speed: l.speed, inclinePercent: l.inclinePercent }]
-      : [];
+    if (durationSeconds <= 0) {
+      return [];
+    }
+    const segment = {
+      phase: l.phase,
+      durationSeconds,
+      speed: l.speed,
+      inclinePercent: l.inclinePercent,
+      breakBefore: pendingBreak || undefined,
+    };
+    pendingBreak = false;
+    return [segment];
   });
+}
+
+export function Cardio_pauseBoundary(record: IHistoryRecord, pausedAt: number): IHistoryRecord {
+  const clock = record.setTimer;
+  const entry = clock && record.entries[clock.entryIndex];
+  const set = clock && entry?.sets[clock.setIndex];
+  const last = set?.cardioLaps?.slice(-1)[0];
+  if (!clock || !set || set.id !== clock.setId || !last) {
+    return record;
+  }
+  const elapsedSeconds = Math.max(last.elapsedSeconds, Math.floor((pausedAt - clock.startedAt) / 1000));
+  const updated = { ...set, cardioLaps: [...set.cardioLaps!, { ...last, elapsedSeconds, breakBefore: true }] };
+  return {
+    ...record,
+    entries: record.entries.map((e, i) =>
+      i === clock.entryIndex ? { ...e, sets: e.sets.map((s, j) => (j === clock.setIndex ? updated : s)) } : e
+    ),
+  };
 }
 
 export function Cardio_duration(
@@ -162,10 +218,19 @@ export function Cardio_manualRecord(
   history: IHistoryRecord[],
   settings: ISettings,
   now: number,
-  previous?: IHistoryRecord
+  previous?: IHistoryRecord,
+  trainingDate?: ITrainingDate
 ): IHistoryRecord {
   const a = v.parse(VCardioActivity, { ...activity, recordingMode: "manual" });
-  const startTime = Dates_timestamp(a.performedLocalDate, a.timeZone, a.performedLocalTime);
+  const oldActivity = previous?.entries[0]?.sets[0]?.devfitCardio;
+  const unchangedDate =
+    oldActivity?.performedLocalDate === a.performedLocalDate &&
+    oldActivity?.performedLocalTime === a.performedLocalTime &&
+    oldActivity?.timeZone === a.timeZone;
+  const startTime =
+    unchangedDate && previous
+      ? previous.startTime
+      : Dates_timestamp(a.performedLocalDate, a.timeZone, a.performedLocalTime);
   if (
     a.performedLocalTime &&
     !Dates_validTime(a.performedLocalDate, a.performedLocalTime, a.timeZone ?? Dates_zone())
@@ -203,12 +268,24 @@ export function Cardio_manualRecord(
     endTime: startTime + a.actualDurationSeconds * 1000,
     updatedAt: now,
     devfitScheduleCredit: previous?.devfitScheduleCredit,
+    devfitTrainingDate: trainingDate
+      ? v.parse(VTrainingDate, trainingDate)
+      : previous
+        ? TrainingDate_changedStart(previous, startTime)
+        : a.datePrecision === "date"
+          ? {
+              source: "legacy_date_only",
+              legacyCivilDate: a.performedLocalDate,
+              timeZone: a.timeZone ?? Dates_zone(),
+              rolloverMinutes: 0,
+            }
+          : TrainingDate_start(startTime, { timeZone: a.timeZone ?? Dates_zone(), rolloverMinutes: 0 }),
     entries: [
       {
         vtype: "history_entry",
         index: 0,
         id: `cardio-entry-${id}`,
-        exercise: { id: "cycling" },
+        exercise: { id: Cardio_exerciseId(a.kind), equipment: "leverageMachine" },
         sets: [set],
         warmupSets: [],
         notes: a.notes,
@@ -258,7 +335,14 @@ export function Cardio_phaseSetting(set: ISet, seconds: number, settings: ICardi
   };
 }
 
-export function Cardio_liveSet(set: ISet, record: IHistoryRecord, text: string, seconds: number, zone?: string): ISet {
+export function Cardio_liveSet(
+  set: ISet,
+  record: IHistoryRecord,
+  text: string,
+  seconds: number,
+  zone?: string,
+  prescription?: ICardioPrescription
+): ISet {
   if (set.isUnilateral) {
     return set;
   }
@@ -270,7 +354,18 @@ export function Cardio_liveSet(set: ISet, record: IHistoryRecord, text: string, 
   return Cardio_mirror(set, {
     ...set.devfitCardio,
     schemaVersion: 1,
-    ...(set.devfitCardio ? { kind: set.devfitCardio.kind, runPlan: set.devfitCardio.runPlan } : Cardio_identity(text)),
+    ...(set.devfitCardio
+      ? { kind: set.devfitCardio.kind, runPlan: set.devfitCardio.runPlan }
+      : prescription
+        ? {
+            kind: prescription.machine,
+            runPlan:
+              prescription.intention === "run_a" || prescription.intention === "run_b"
+                ? prescription.intention
+                : undefined,
+          }
+        : Cardio_identity(text)),
+    intention: set.devfitCardio?.intention ?? prescription?.intention,
     recordingMode: "live",
     datePrecision: "minute",
     performedLocalDate:

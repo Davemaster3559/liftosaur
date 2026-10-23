@@ -18,6 +18,7 @@ function workout(daysAgo: number, weight: number = 100): IHistoryRecord {
   record.id = record.startTime = start.getTime();
   record.endTime = record.startTime + 1000;
   record.date = start.toISOString();
+  delete record.devfitTrainingDate;
   record.entries[0].sets[0] = {
     ...record.entries[0].sets[0],
     completedReps: 5,

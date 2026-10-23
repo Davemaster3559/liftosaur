@@ -1,3 +1,6 @@
+import { Platform } from "react-native";
+import { Milestones_decision } from "../devfit/milestones";
+import { CardioProgression_holdReason } from "../devfit/cardioProgression";
 import {
   Exercise_onerm,
   Exercise_get,
@@ -49,6 +52,7 @@ import {
   IEvaluatedProgram,
   Program_getProgramDay,
   Program_getProgramDayUsedExercises,
+  Program_getProgramExercise,
   Program_getProgramExerciseForKeyAndDay,
   Program_getAllProgramExercisesWithType,
   Program_createEmptyProgram,
@@ -81,8 +85,9 @@ import {
 import { INativeEffect } from "./nativeEffects";
 import { Capabilities_hasLocal } from "../devfit/capabilities";
 import { WorkoutFocus_shouldStartRest } from "../devfit/workoutFocus";
-import { Cardio_liveSet } from "../devfit/cardio";
+import { Cardio_liveSet, Cardio_pauseBoundary } from "../devfit/cardio";
 import { Dates_key } from "../devfit/dates";
+import { TrainingDate_changedStart } from "../devfit/trainingDates";
 import { Session_exerciseKind, Session_timedRecordingSet } from "../devfit/presentation";
 import { Subscriptions_hasSubscription } from "../utils/subscriptions";
 import { IPercentage, IScriptErrorHandler, ITimedSetSide } from "../types";
@@ -440,6 +445,9 @@ export function Progress_scheduleTimerNotification(
       volume: settings.volume,
       timerSinceMs,
       timerSeconds,
+      eventId: progress.devfitRestEvent?.id,
+      eventRevision: progress.devfitRestEvent?.revision,
+      deadline: progress.devfitRestEvent?.deadline,
     },
   });
 }
@@ -471,27 +479,22 @@ export function Progress_startTimer(
         : settings.timers[mode] || undefined;
   }
   if (!timer && !(isAdjusting && timer === 0 && progress.timerSince != null)) {
+    if (progress.timerSince != null) {
+      effects.push({
+        type: "stopTimer",
+        eventId: progress.devfitRestEvent?.id,
+        eventRevision: progress.devfitRestEvent?.revision,
+      });
+    }
     return {
       ...progress,
+      devfitRestEvent: progress.devfitRestEvent && { ...progress.devfitRestEvent, cancelled: true, claimed: true },
       timerSince: undefined,
       timer: undefined,
       timerMode: undefined,
       timerEntryIndex: undefined,
       timerSetIndex: undefined,
     };
-  }
-  if (Capabilities_hasLocal("notifications") && !History_isActivelyPaused(progress.intervals)) {
-    // A backdated start (rest resumed after the screen was locked past the target) can already be overrun,
-    // so only schedule the "rest is over" notification when there's still time left — UNTimeIntervalNotificationTrigger
-    // aborts on a non-positive interval.
-    const timerForPush = timer - Math.round((Date.now() - timestamp) / 1000);
-    if (timerForPush > 0) {
-      Progress_scheduleTimerNotification(effects, progress, entryIndex, mode, settings, timerForPush, timestamp, timer);
-    } else {
-      // Backdated start that's already overrun: schedule nothing, but clear any earlier pending
-      // notification so a stale one doesn't fire.
-      effects.push({ type: "stopTimer" });
-    }
   }
   const newProgress: IHistoryRecord = {
     ...progress,
@@ -500,8 +503,36 @@ export function Progress_startTimer(
     timerMode: mode,
     timerEntryIndex: entryIndex,
     timerSetIndex: setIndex,
+    devfitRestEvent: {
+      id: isAdjusting && progress.devfitRestEvent ? progress.devfitRestEvent.id : UidFactory_generateUid(12),
+      deadline: timestamp + timer * 1000,
+      revision:
+        isAdjusting && progress.devfitRestEvent
+          ? (progress.devfitRestEvent.revision ?? 0) +
+            (progress.devfitRestEvent.deadline !== timestamp + timer * 1000 || progress.devfitRestEvent.cancelled
+              ? 1
+              : 0)
+          : 0,
+      native: Capabilities_hasLocal("notifications") && Platform.OS === "android",
+      claimed: false,
+    },
     ui: { ...progress.ui, nativeNotificationScheduled: undefined },
   };
+  if (Capabilities_hasLocal("notifications") && !History_isActivelyPaused(progress.intervals)) {
+    const timerForPush = timer - Math.round((Date.now() - timestamp) / 1000);
+    if (timerForPush > 0) {
+      Progress_scheduleTimerNotification(
+        effects,
+        newProgress,
+        entryIndex,
+        mode,
+        settings,
+        timerForPush,
+        timestamp,
+        timer
+      );
+    }
+  }
   return newProgress;
 }
 
@@ -606,8 +637,37 @@ export function Progress_updateTimer(
   liveActivitySetIndex: number | undefined,
   skipLiveActivityUpdate: boolean,
   settings: ISettings,
-  subscription: ISubscription | undefined
+  subscription: ISubscription | undefined,
+  nativeTappedAt?: number
 ): IHistoryRecord {
+  if (progress.timerSince == null || progress.timer == null || History_isActivelyPaused(progress.intervals)) {
+    return progress;
+  }
+  const deadline = progress.timerSince + progress.timer * 1000;
+  const acceptedNativeTap =
+    nativeTappedAt != null &&
+    nativeTappedAt >= progress.timerSince &&
+    nativeTappedAt < deadline &&
+    nativeTappedAt <= Date.now();
+  if (History_clockNow(progress) >= deadline && !acceptedNativeTap) {
+    return progress;
+  }
+  if (
+    acceptedNativeTap &&
+    progress.timerSince + newTimer * 1000 > nativeTappedAt! &&
+    progress.timerSince + newTimer * 1000 <= Date.now()
+  ) {
+    return {
+      ...progress,
+      timer: newTimer,
+      devfitRestEvent: progress.devfitRestEvent && {
+        ...progress.devfitRestEvent,
+        deadline: progress.timerSince + newTimer * 1000,
+        revision: (progress.devfitRestEvent.revision ?? 0) + 1,
+        claimed: false,
+      },
+    };
+  }
   const timerForPush = newTimer - Math.round((History_clockNow(progress) - timerSince) / 1000);
   if (timerForPush > 0) {
     const newProgress = Progress_startTimer(
@@ -626,7 +686,7 @@ export function Progress_updateTimer(
       LiveActivityManager_updateProgressLiveActivity(
         effects,
         program,
-        progress,
+        newProgress,
         settings,
         subscription,
         liveActivityEntryIndex,
@@ -637,10 +697,16 @@ export function Progress_updateTimer(
     }
     return newProgress;
   } else {
-    effects.push({ type: "stopTimer" });
+    effects.push({
+      type: "stopTimer",
+      eventId: progress.devfitRestEvent?.id,
+      eventRevision: progress.devfitRestEvent?.revision,
+    });
     const newProgress = {
-      ...progress,
-      timer: Math.max(0, newTimer),
+      ...Progress_stopTimerPure({
+        ...progress,
+        devfitRestEvent: progress.devfitRestEvent && { ...progress.devfitRestEvent, cancelled: true, claimed: true },
+      }),
       ui: {
         ...progress.ui,
         nativeNotificationScheduled: undefined,
@@ -650,13 +716,13 @@ export function Progress_updateTimer(
       LiveActivityManager_updateProgressLiveActivity(
         effects,
         program,
-        progress,
+        newProgress,
         settings,
         subscription,
         liveActivityEntryIndex,
         liveActivitySetIndex,
-        Math.max(0, newTimer),
-        progress.timerSince || Date.now()
+        undefined,
+        undefined
       );
     }
     return newProgress;
@@ -680,8 +746,15 @@ export function Progress_maybeApplySuperset(
 }
 
 export function Progress_stopTimer(effects: INativeEffect[], progress: IHistoryRecord): IHistoryRecord {
-  effects.push({ type: "stopTimer" });
-  return Progress_stopTimerPure(progress);
+  effects.push({
+    type: "stopTimer",
+    eventId: progress.devfitRestEvent?.id,
+    eventRevision: progress.devfitRestEvent?.revision,
+  });
+  return Progress_stopTimerPure({
+    ...progress,
+    devfitRestEvent: progress.devfitRestEvent && { ...progress.devfitRestEvent, cancelled: true, claimed: true },
+  });
 }
 
 export function Progress_resumeWorkout(
@@ -698,7 +771,7 @@ export function Progress_resumeWorkout(
   const pausedAt = History_pauseTime(progress.intervals);
   const shift = pausedAt == null ? 0 : Math.max(0, now - pausedAt);
   let resumed: IHistoryRecord = {
-    ...progress,
+    ...Cardio_pauseBoundary(progress, pausedAt ?? now),
     intervals: History_resumeWorkout(
       effects,
       progress,
@@ -727,7 +800,7 @@ export function Progress_resumeWorkout(
   ) {
     resumed = Progress_startTimer(
       effects,
-      resumed,
+      { ...resumed, devfitRestEvent: undefined },
       resumed.timerSince,
       resumed.timerMode ?? "workout",
       resumed.timerEntryIndex,
@@ -920,6 +993,7 @@ export function Progress_changeDate(progress: IHistoryRecord, dateStr?: string, 
     ...progress,
     ...(dateStr != null ? { date: DateUtils_fromYYYYMMDDStr(dateStr) } : {}),
     startTime,
+    devfitTrainingDate: TrainingDate_changedStart(progress, startTime),
     intervals: [[startTime, endTime]],
     endTime,
     ui: {
@@ -1494,8 +1568,12 @@ export function Progress_advanceTimedSet(
   const prevNonce = progress.setTimer?.nonce;
   // Advancing ends the current (auto) rest — cancel its pending "rest is over" notification so it doesn't
   // fire during the next set's clock.
-  if (progress.timerSince != null) {
-    effects.push({ type: "stopTimer" });
+  if (progress.timerSince != null && phaseStartedAt < progress.timerSince + (progress.timer ?? 0) * 1000) {
+    effects.push({
+      type: "stopTimer",
+      eventId: progress.devfitRestEvent?.id,
+      eventRevision: progress.devfitRestEvent?.revision,
+    });
   }
   // Follow the clock to the next set's exercise so the shown exercise tracks the active set (EMOM/Tabata can
   // roll into a different exercise). currentEntryIndex syncs, so every client's view moves with it.
@@ -1705,12 +1783,7 @@ export function Progress_isSetTimerCheckDue(progress: IHistoryRecord, now: numbe
     progress.timerEntryIndex != null &&
     progress.timerSetIndex != null
   ) {
-    const restSet = progress.entries[progress.timerEntryIndex]?.sets[progress.timerSetIndex];
-    return !!(
-      restSet?.auto &&
-      now - progress.timerSince >= progress.timer * 1000 &&
-      Progress_getNextTimedSet(progress) != null
-    );
+    return now - progress.timerSince >= progress.timer * 1000;
   }
   return false;
 }
@@ -1775,6 +1848,21 @@ export function Progress_checkSetTimer(
     current.timerSetIndex != null
   ) {
     const restSet = current.entries[current.timerEntryIndex]?.sets[current.timerSetIndex];
+    const expired = now - current.timerSince >= current.timer * 1000;
+    let ended = current;
+    if (expired) {
+      const event = current.devfitRestEvent;
+      const shouldCue = event && !event.cancelled && !event.native && !event.claimed && now <= event.deadline + 5000;
+      if (shouldCue) {
+        effects.push({
+          type: "restCue",
+          volume: settings.volume,
+          vibration: !!settings.vibration,
+          ignoreDoNotDisturb: !!settings.ignoreDoNotDisturb,
+        });
+      }
+      ended = { ...current, devfitRestEvent: event && { ...event, claimed: event.claimed || !!shouldCue } };
+    }
     if (
       restSet?.auto &&
       now - current.timerSince >= current.timer * 1000 &&
@@ -1785,12 +1873,15 @@ export function Progress_checkSetTimer(
       // throttled timer, a wake) must not hand out a full fresh countdown and stretch the round.
       return Progress_advanceTimedSet(
         effects,
-        current,
+        ended,
         settings,
         true,
         Progress_getAutoGetReadySeconds(restSet, settings),
         current.timerSince + current.timer * 1000
       );
+    }
+    if (expired) {
+      return Progress_stopTimerPure(ended);
     }
   }
   return current;
@@ -2593,7 +2684,14 @@ function Progress_captureCardio(
     .p("sets")
     .i(setIndex)
     .modify((s) =>
-      Cardio_liveSet(s, progress, text, seconds, settings.devfitSchedules?.[progress.programId]?.homeTimeZone)
+      Cardio_liveSet(
+        s,
+        progress,
+        text,
+        seconds,
+        settings.devfitSchedules?.[progress.programId]?.homeTimeZone,
+        entry.devfitCardioPrescription
+      )
     );
 }
 
@@ -2984,6 +3082,12 @@ export function Progress_finishWorkout(
   storage: IStorage,
   progress: IHistoryRecord
 ): IStorage {
+  if (
+    Progress_isCurrent(progress) &&
+    storage.history.some((h) => h.programId === progress.programId && h.startTime === progress.startTime)
+  ) {
+    return storage;
+  }
   const settings = storage.settings;
   const clock = progress.setTimer;
   if (
@@ -3003,13 +3107,37 @@ export function Progress_finishWorkout(
   const program = progress.programId === emptyProgramId ? Program_createEmptyProgram() : storage.programs[programIndex];
   const evaluatedProgram = program ? Program_evaluate(program, settings) : undefined;
   Progress_stopTimer(effects, progress);
-  const historyRecord = History_finishProgramDay(
+  let historyRecord = History_finishProgramDay(
     progress,
     storage.settings,
     progress.day,
     evaluatedProgram,
     storage.stats
   );
+  if (Progress_isCurrent(progress) && program?.devfitPlan) {
+    historyRecord = {
+      ...historyRecord,
+      entries: historyRecord.entries.map((entry) => {
+        const target = program.devfitPlan?.targets[entry.programExerciseId ?? ""];
+        const source = progress.entries.find((e) => e.id === entry.id);
+        if (target && source) {
+          return {
+            ...entry,
+            progressSnapshot: {
+              ...entry.progressSnapshot,
+              diffState: { target: Milestones_decision(progress, source, target, settings).reason },
+            },
+          };
+        }
+        const exercise =
+          evaluatedProgram && Program_getProgramExercise(progress.day, evaluatedProgram, entry.programExerciseId);
+        const held = source && exercise && CardioProgression_holdReason(progress, source, exercise, settings);
+        return held
+          ? { ...entry, progressSnapshot: { ...entry.progressSnapshot, diffState: { target: held } } }
+          : entry;
+      }),
+    };
+  }
   let newHistory;
   if (!Progress_isCurrent(progress)) {
     newHistory = storage.history.map((h) => (h.id === progress.id ? historyRecord : h));

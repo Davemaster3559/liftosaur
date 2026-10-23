@@ -2,8 +2,9 @@ import { IDevFitSchedule, IHistoryRecord, ISettings } from "../types";
 import { IEvaluatedProgram, Program_getListOfDays, Program_getProgramDay } from "../models/program";
 import { Session_day } from "./presentation";
 import { Dates_add, Dates_day, Dates_key, Dates_timestamp, Dates_zone } from "./dates";
-import { Cardio_recordDate } from "./cardio";
 import { IScheduleCredit } from "./cardioSchema";
+import { TrainingDate_key, TrainingDate_record, TrainingDate_scheduleConfig } from "./trainingDates";
+import { Rotation_role as role, Rotation_roles } from "./rotationIdentity";
 
 export const DEVFIT_WORK_STEPS_DAYS = [2, 7, 11] as const;
 const personalSlots = [
@@ -32,32 +33,28 @@ export function Schedule_dayNumber(
   anchor: string | undefined,
   days: number,
   now: number,
-  zone?: string
+  zone?: string,
+  rolloverMinutes = 0
 ): number | undefined {
-  const start = Dates_day(anchor);
-  if (start == null || days < 1 || !Number.isInteger(days)) {
-    return undefined;
-  }
-  return ((((Dates_day(Dates_key(now, zone))! - start) % days) + days) % days) + 1;
+  return Schedule_dayForDate(anchor, days, TrainingDate_key(now, Dates_zone(zone), rolloverMinutes));
 }
 
-function role(text: string): string | undefined {
-  const pair = text.match(/\b(upper|lower|run)[ _-]*([ab])\d*\b/i);
-  return pair ? `${pair[1].toLowerCase()}_${pair[2].toLowerCase()}` : /endurance/i.test(text) ? "endurance" : undefined;
+export function Schedule_dayForDate(anchor: string | undefined, days: number, date: string): number | undefined {
+  const start = Dates_day(anchor);
+  const current = Dates_day(date);
+  if (start == null || current == null || days < 1 || !Number.isInteger(days)) {
+    return undefined;
+  }
+  return ((((current - start) % days) + days) % days) + 1;
 }
 
 function personalDays(program: IEvaluatedProgram): Map<string, number[]> | undefined {
-  const roles = new Map<string, number[]>();
-  for (const [id, name] of Program_getListOfDays(program)) {
-    const day = Program_getProgramDay(program, Number(id));
-    const identity = role(name) ?? role(day?.exercises.map((e) => e.label || e.name).join(" ") ?? "");
-    if (identity) {
-      roles.set(identity, [...(roles.get(identity) ?? []), Number(id)]);
-    }
-  }
-  return ["run_a", "run_b", "upper_a", "lower_a", "upper_b", "lower_b", "endurance"].every((r) => roles.has(r))
-    ? roles
-    : undefined;
+  return Rotation_roles(
+    Program_getListOfDays(program).map(([id, name]) => {
+      const day = Program_getProgramDay(program, Number(id));
+      return { day: Number(id), name, details: day?.exercises.map((e) => e.label || e.name).join(" ") };
+    })
+  );
 }
 
 export function Schedule_default(program: IEvaluatedProgram): IDevFitSchedule {
@@ -70,6 +67,7 @@ export function Schedule_default(program: IEvaluatedProgram): IDevFitSchedule {
       homeTimeZone: "America/Edmonton",
       referenceSource: "personal_oct7",
       personalRotation: true,
+      trainingDayRolloverMinutes: 900,
       days: personalSlots.map((r, i) => {
         const occurrence = occurrences.get(r) ?? 0;
         occurrences.set(r, occurrence + 1);
@@ -117,8 +115,14 @@ export function Schedule_get(program: IEvaluatedProgram, settings: ISettings): I
         anchorDate: "2026-10-07",
         homeTimeZone: "America/Edmonton",
         referenceSource: "personal_oct7",
+        trainingDayRolloverMinutes: saved.trainingDayRolloverMinutes ?? 900,
       }
-    : { ...saved, homeTimeZone: saved.homeTimeZone || Dates_zone() };
+    : {
+        ...saved,
+        personalRotation: personal,
+        homeTimeZone: saved.homeTimeZone || Dates_zone(),
+        trainingDayRolloverMinutes: saved.trainingDayRolloverMinutes ?? (personal ? 900 : 0),
+      };
 }
 
 export function Schedule_suggestion(
@@ -133,15 +137,15 @@ export function Schedule_suggestion(
   );
   const candidates = Array.from({ length: config.cycleDays }, (_, index) => {
     const day = index + 1;
-    const anchor = Dates_add(Dates_key(now, config.homeTimeZone), 1 - day);
+    const dateConfig = TrainingDate_scheduleConfig(config);
+    const anchor = Dates_add(TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes), 1 - day);
     let score = 0;
     for (const r of records) {
-      const performed = Schedule_dayNumber(
-        anchor,
-        config.cycleDays,
-        Dates_timestamp(Cardio_recordDate(r, config.homeTimeZone), config.homeTimeZone),
-        config.homeTimeZone
-      )!;
+      const performedDate = TrainingDate_record(r, dateConfig);
+      if (!performedDate) {
+        continue;
+      }
+      const performed = Schedule_dayForDate(anchor, config.cycleDays, performedDate)!;
       if (
         [0, 1, 2].some(
           (delay) =>
@@ -172,13 +176,7 @@ export function Schedule_creditValid(
 ): boolean {
   return (
     credit.programId === program.id &&
-    credit.rotationDay ===
-      Schedule_dayNumber(
-        config.anchorDate,
-        config.cycleDays,
-        Dates_timestamp(credit.scheduledDate, config.homeTimeZone),
-        config.homeTimeZone
-      ) &&
+    credit.rotationDay === Schedule_dayForDate(config.anchorDate, config.cycleDays, credit.scheduledDate) &&
     config.days.find((s) => s.day === credit.rotationDay)?.programDay === credit.programDay
   );
 }
@@ -199,22 +197,26 @@ function completedForSlot(
   const expectedRun =
     role(planned?.name ?? "") ?? role(planned?.exercises.map((e) => e.label || e.name).join(" ") ?? "");
   return history.find((r) => {
-    if (
-      !r.entries.some((e) => e.sets.some((s) => s.isCompleted)) ||
-      Cardio_recordDate(r, config.homeTimeZone) > Dates_key(now, config.homeTimeZone)
-    ) {
+    if (!r.entries.some((e) => e.sets.some((s) => s.isCompleted))) {
       return false;
     }
+    const dateOnly = r.source === "devfit_manual" && r.entries[0]?.sets[0]?.devfitCardio?.datePrecision === "date";
+    if (!dateOnly && r.startTime > now) {
+      return false;
+    }
+    const dateConfig = TrainingDate_scheduleConfig(config);
+    const today = TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes);
     const link = r.devfitScheduleCredit;
     if (link) {
       return (
         Schedule_creditValid(link, program, config) &&
+        link.scheduledDate <= today &&
         link.scheduledDate === date &&
         link.rotationDay === day &&
         link.programDay === slot.programDay
       );
     }
-    if (Cardio_recordDate(r, config.homeTimeZone) !== date) {
+    if (TrainingDate_record(r, dateConfig) !== date || date > today) {
       return false;
     }
     if (r.programId === program.id && r.day === slot.programDay) {
@@ -252,21 +254,39 @@ export function Schedule_slots(
   now: number
 ): IRotationSlot[] {
   const config = Schedule_get(program, settings);
-  const todayKey = Dates_key(now, config.homeTimeZone);
-  const today = Schedule_dayNumber(config.anchorDate, config.cycleDays, now, config.homeTimeZone);
-  const start = Dates_add(todayKey, 1 - (today ?? 1));
+  const dateConfig = TrainingDate_scheduleConfig(config);
+  return Schedule_slotsForDate(
+    program,
+    settings,
+    history,
+    TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes),
+    now
+  );
+}
+
+export function Schedule_slotsForDate(
+  program: IEvaluatedProgram,
+  settings: ISettings,
+  history: IHistoryRecord[],
+  trainingDate: string,
+  now = Date.now()
+): IRotationSlot[] {
+  const config = Schedule_get(program, settings);
+  const dateConfig = TrainingDate_scheduleConfig(config);
+  const todayKey = TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes);
+  const referenceDay = Schedule_dayForDate(config.anchorDate, config.cycleDays, trainingDate);
+  const start = Dates_add(trainingDate, 1 - (referenceDay ?? 1));
   return Array.from({ length: config.cycleDays }, (_, index) => {
     const day = index + 1;
     const slot = config.days.find((s) => s.day === day);
     const planned = slot?.programDay != null ? Program_getProgramDay(program, slot.programDay) : undefined;
     const session = planned ? Session_day(planned, settings) : undefined;
-    const dateKey = today == null ? undefined : Dates_add(start, index);
+    const dateKey = referenceDay == null ? undefined : Dates_add(start, index);
     const completed = dateKey ? completedForSlot(program, config, day, dateKey, history, now) : undefined;
     const performed = dateKey
       ? history.filter(
           (r) =>
-            Cardio_recordDate(r, config.homeTimeZone) === dateKey &&
-            r.entries.some((e) => e.sets.some((s) => s.isCompleted))
+            TrainingDate_record(r, dateConfig) === dateKey && r.entries.some((e) => e.sets.some((s) => s.isCompleted))
         )
       : [];
     return {
@@ -278,10 +298,10 @@ export function Schedule_slots(
       dateKey,
       date: dateKey ? new Date(Dates_timestamp(dateKey, config.homeTimeZone)) : undefined,
       completed: !!completed,
-      completedLate: !!completed && Cardio_recordDate(completed, config.homeTimeZone) !== dateKey,
+      completedLate: !!completed && TrainingDate_record(completed, dateConfig) !== dateKey,
       performed,
       mismatched: performed.filter((r) => r.id !== completed?.id),
-      isToday: day === today,
+      isToday: dateKey === todayKey,
       isNext: slot?.programDay === program.nextDay,
       missed: !!dateKey && dateKey < todayKey && !!session && session.kind !== "recovery" && !completed,
     };
@@ -308,17 +328,13 @@ export function Schedule_missedSessions(
   if (Dates_day(config.anchorDate) == null) {
     return [];
   }
-  const today = Dates_key(now, config.homeTimeZone);
+  const dateConfig = TrainingDate_scheduleConfig(config);
+  const today = TrainingDate_key(now, dateConfig.timeZone, dateConfig.rolloverMinutes);
   const elapsed = Dates_day(today)! - Dates_day(config.anchorDate)!;
   const result: IMissedSession[] = [];
   for (let ago = 1; ago <= Math.min(elapsed, config.cycleDays * 2); ago += 1) {
     const date = Dates_add(today, -ago);
-    const day = Schedule_dayNumber(
-      config.anchorDate,
-      config.cycleDays,
-      Dates_timestamp(date, config.homeTimeZone),
-      config.homeTimeZone
-    )!;
+    const day = Schedule_dayForDate(config.anchorDate, config.cycleDays, date)!;
     const slot = config.days.find((s) => s.day === day);
     const planned = slot?.programDay != null ? Program_getProgramDay(program, slot.programDay) : undefined;
     if (!planned || slot?.programDay == null) {
@@ -372,7 +388,7 @@ export function Schedule_overview(
       !history.some(
         (r) =>
           r.catchUpFor === program.id &&
-          Cardio_recordDate(r, config.homeTimeZone) >= m.date &&
+          (TrainingDate_record(r, TrainingDate_scheduleConfig(config)) ?? "") >= m.date &&
           r.entries.some((e) => e.sets.some((s) => s.isCompleted))
       )
   );
@@ -414,7 +430,14 @@ export function Schedule_assign(
 export function Schedule_anchor(config: IDevFitSchedule, selectedDay: number, now: number): IDevFitSchedule {
   return {
     ...config,
-    anchorDate: Dates_add(Dates_key(now, config.homeTimeZone), 1 - selectedDay),
+    anchorDate: Dates_add(
+      TrainingDate_key(
+        now,
+        Dates_zone(config.homeTimeZone),
+        config.trainingDayRolloverMinutes ?? (config.personalRotation ? 900 : 0)
+      ),
+      1 - selectedDay
+    ),
     homeTimeZone: config.homeTimeZone || Dates_zone(),
     referenceSource: "confirmed",
     setupDismissed: undefined,

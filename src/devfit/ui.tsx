@@ -73,6 +73,7 @@ export function DevFitAction(props: {
       accessibilityState={{ disabled: !!props.disabled }}
       testID={props.testID}
       data-testid={props.testID}
+      data-cy={props.testID}
       disabled={props.disabled}
       onPress={props.onPress}
       style={({ pressed }) => ({

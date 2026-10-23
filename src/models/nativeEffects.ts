@@ -6,7 +6,8 @@ import { IWorkoutMirroring } from "../utils/workoutMirroring";
 
 export type INativeEffect =
   | { type: "startTimer"; params: INativeTimerStartParams }
-  | { type: "stopTimer" }
+  | { type: "stopTimer"; eventId?: string; eventRevision?: number }
+  | { type: "restCue"; volume: number; vibration: boolean; ignoreDoNotDisturb?: boolean }
   | { type: "updateLiveActivity"; state: ILiveActivityState }
   | { type: "resumeWorkout"; reminder: number; isStart: boolean; hasSubscription: boolean }
   | { type: "pauseWorkout" }
@@ -14,6 +15,14 @@ export type INativeEffect =
   | { type: "sendDiscardWorkoutToWatch" };
 
 export interface INativeEffectBridges {
+  audio?: {
+    play(
+      volume: number,
+      vibration: boolean,
+      sound?: "notification" | "set-timer-end" | "get-ready-end",
+      ignoreDoNotDisturb?: boolean
+    ): void;
+  };
   timer: ITimerBridge;
   workout: IWorkoutBridge;
   watch: IWatchBridge;
@@ -33,7 +42,14 @@ export function NativeEffects_apply(bridges: INativeEffectBridges, effects: read
         bridges.timer.startTimer(effect.params);
         break;
       case "stopTimer":
-        bridges.timer.stopTimer();
+        bridges.timer.stopTimer(effect.eventId, effect.eventRevision);
+        break;
+      case "restCue":
+        if (bridges.audio) {
+          bridges.audio.play(effect.volume, effect.vibration, "notification", effect.ignoreDoNotDisturb);
+        } else {
+          bridges.timer.playSound(effect.volume, effect.vibration, "notification", effect.ignoreDoNotDisturb);
+        }
         break;
       case "updateLiveActivity":
         bridges.workout.updateLiveActivity(effect.state);

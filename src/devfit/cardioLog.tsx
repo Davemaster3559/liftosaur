@@ -8,8 +8,9 @@ import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { DevFitAction, DevFitSurface, DevFitTitle } from "./ui";
 import { CardioActions_credit, CardioActions_delete, CardioActions_save } from "./cardioActions";
 import { CardioProgress_records, ICardioPoint } from "./cardioProgress";
-import { Dates_add, Dates_key, Dates_timestamp, Dates_zone } from "./dates";
-import { Schedule_get, Schedule_slots } from "./schedule";
+import { Dates_add, Dates_key } from "./dates";
+import { Schedule_get, Schedule_slotsForDate } from "./schedule";
+import { TrainingDate_key, TrainingDate_record, TrainingDate_scheduleConfig } from "./trainingDates";
 import { DevFitCardioActivityForm } from "./cardioActivityForm";
 import { DevFitCardioRecordCard } from "./cardioRecordCard";
 
@@ -31,7 +32,8 @@ export function DevFitCardioLog(props: {
     () => (props.program ? Program_evaluate(props.program, props.settings) : undefined),
     [props.program, props.settings]
   );
-  const zone = evaluated ? Schedule_get(evaluated, props.settings).homeTimeZone || Dates_zone() : Dates_zone();
+  const dateConfig = TrainingDate_scheduleConfig(evaluated ? Schedule_get(evaluated, props.settings) : undefined);
+  const zone = dateConfig.timeZone;
   const points = useMemo(
     () =>
       mode === "closed"
@@ -47,17 +49,15 @@ export function DevFitCardioLog(props: {
   const slots =
     evaluated && linkRecord
       ? [-14, 0].flatMap((offset) =>
-          Schedule_slots(
+          Schedule_slotsForDate(
             evaluated,
             props.settings,
             props.history,
-            Dates_timestamp(
-              Dates_add(
+            Dates_add(
+              TrainingDate_record(linkRecord, dateConfig) ??
                 linkRecord.entries[0]?.sets[0]?.devfitCardio?.performedLocalDate ??
-                  Dates_key(linkRecord.startTime, zone),
-                offset
-              ),
-              zone
+                Dates_key(linkRecord.startTime, zone),
+              offset
             )
           )
         )
@@ -91,13 +91,16 @@ export function DevFitCardioLog(props: {
                 zone={zone}
                 activity={mode === "edit" ? activity : undefined}
                 recordId={mode === "edit" ? selected : undefined}
+                trainingDate={mode === "edit" ? record?.devfitTrainingDate : undefined}
+                rolloverMinutes={dateConfig.rolloverMinutes}
                 onCancel={() => setMode("list")}
-                onSave={(a) => {
+                onSave={(a, trainingDate) => {
                   props.dispatch(
                     CardioActions_save(
                       a,
                       mode === "edit" ? selected : undefined,
-                      mode === "edit" ? record?.devfitScheduleCredit : undefined
+                      mode === "edit" ? record?.devfitScheduleCredit : undefined,
+                      trainingDate
                     )
                   );
                   setMode("list");
@@ -132,7 +135,12 @@ export function DevFitCardioLog(props: {
                         recorded.
                       </Text>
                       {slots
-                        .filter((s) => s.session && s.dateKey && s.dateKey <= Dates_key(Date.now(), zone))
+                        .filter(
+                          (s) =>
+                            s.session &&
+                            s.dateKey &&
+                            s.dateKey <= TrainingDate_key(Date.now(), zone, dateConfig.rolloverMinutes)
+                        )
                         .map((s) => (
                           <DevFitAction
                             key={s.dateKey}
@@ -163,6 +171,7 @@ export function DevFitCardioLog(props: {
               }
               renderItem={({ item: p }) => (
                 <DevFitCardioRecordCard
+                  dispatch={props.dispatch}
                   point={p}
                   deleting={deleting && selected === p.record.id}
                   onEdit={() => {

@@ -32,6 +32,8 @@ export type LiveActivityEntry = {
 };
 
 export type LiveActivityRest = {
+  eventId?: string;
+  eventRevision?: number;
   restTimerSince: number;
   restTimer: number;
   isAuto: boolean;
@@ -76,6 +78,11 @@ export type LiveActivityState = {
 };
 
 export type LiveActivityActionEvent = {
+  restEventId?: string;
+  restRevision?: number;
+  restTimer?: number;
+  restTimerSince?: number;
+  restDeadline?: number;
   action:
     | "completeSet"
     | "addRestTime"

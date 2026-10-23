@@ -23,6 +23,7 @@ import { usePerfRenderCount } from "../utils/usePerfRenderCount";
 import { IWorkoutProgressView, WorkoutProgressView_next } from "../utils/workoutProgressView";
 import { DevFitWorkout } from "../devfit/workout";
 import { DevFitRestPanel } from "../devfit/restPanel";
+import { DevFitTrainingDateChoice } from "../devfit/trainingDateChoice";
 import { DevFitAction } from "../devfit/ui";
 
 interface IScreenWorkoutProps {
@@ -287,6 +288,7 @@ function ScreenWorkoutInner(props: IScreenWorkoutProps): JSX.Element | null {
     }
     return (
       <View style={{ flex: 1 }}>
+        <DevFitTrainingDateChoice record={progress} dispatch={dispatch} />
         {isCurrent && <DevFitAction label="Back to focused workout" secondary onPress={() => setAdvanced(false)} />}
         {isCurrent && <DevFitRestPanel progress={progress} settings={settings} dispatch={dispatch} />}
         <Workout

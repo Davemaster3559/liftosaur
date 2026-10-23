@@ -208,12 +208,12 @@ describe("Native effects", () => {
     expect(effects).to.eql([]);
   });
 
-  it("an overrun rest stops the timer instead of scheduling one", () => {
+  it("an expired rest leaves its due native cue intact instead of cancelling or rescheduling it", () => {
     const progress = buildProgress(`# Week 1\n## Day 1\nSquat / 3x5 100lb / 60s\n`);
     progress.entries[0].sets[0].isCompleted = true;
     const effects: INativeEffect[] = [];
     Progress_startTimer(effects, progress, Date.now() - 120000, "workout", 0, 0, Settings_build(), subscribed, 60);
-    expect(types(effects)).to.eql(["stopTimer"]);
+    expect(types(effects)).to.eql([]);
   });
 
   it("runs the bridges in list order", () => {

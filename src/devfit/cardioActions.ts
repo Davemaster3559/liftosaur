@@ -7,8 +7,15 @@ import { Program_evaluate } from "../models/program";
 import { Schedule_creditValid, Schedule_get } from "./schedule";
 import { IHistoryRecord, ISettings } from "../types";
 import { History_clockNow, History_isActivelyPaused } from "../models/history";
+import { ITrainingDate, TrainingDate_config, TrainingDate_start } from "./trainingDates";
+import { Dates_timestamp } from "./dates";
 
-export function CardioActions_save(activity: ICardioActivity, previousId?: number, credit?: IScheduleCredit): IThunk {
+export function CardioActions_save(
+  activity: ICardioActivity,
+  previousId?: number,
+  credit?: IScheduleCredit,
+  trainingDate?: ITrainingDate
+): IThunk {
   return async (dispatch, getState) => {
     const state = getState();
     const previous =
@@ -23,7 +30,23 @@ export function CardioActions_save(activity: ICardioActivity, previousId?: numbe
       ...Object.values(state.storage.progress),
       ...Object.values(state.progress),
     ].filter((r): r is IHistoryRecord => !!r);
-    const record = Cardio_manualRecord(activity, allRecords, state.storage.settings, Date.now(), previous);
+    const dateConfig = TrainingDate_config(state.storage.settings, state.storage.currentProgramId);
+    const defaultAssignment: ITrainingDate | undefined = previous
+      ? undefined
+      : activity.datePrecision === "date"
+        ? { source: "training_date", date: activity.performedLocalDate, ...dateConfig }
+        : TrainingDate_start(
+            Dates_timestamp(activity.performedLocalDate, activity.timeZone, activity.performedLocalTime),
+            dateConfig
+          );
+    const record = Cardio_manualRecord(
+      activity,
+      allRecords,
+      state.storage.settings,
+      Date.now(),
+      previous,
+      trainingDate ?? defaultAssignment
+    );
     record.devfitScheduleCredit = credit ?? previous?.devfitScheduleCredit;
     updateState(
       dispatch,

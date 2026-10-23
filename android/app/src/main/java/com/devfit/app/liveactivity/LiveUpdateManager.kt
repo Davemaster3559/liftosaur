@@ -60,7 +60,9 @@ class LiveUpdateManager(private val context: Context) {
     data class LiveActivityRest(
         val restTimerSince: Long,
         val restTimer: Int,
-        val isAuto: Boolean
+        val isAuto: Boolean,
+        val eventId: String? = null,
+        val eventRevision: Long = 0
     )
 
     data class LiveActivitySetTimer(
@@ -136,7 +138,12 @@ class LiveUpdateManager(private val context: Context) {
         createNotificationChannels()
 
         try {
-            val state = parseState(stateMap) ?: return
+            var state = parseState(stateMap) ?: return
+            val currentRest = currentState?.restTimer
+            val incomingRest = state.restTimer
+            if (currentRest != null && incomingRest != null && incomingRest.eventId == currentRest.eventId && incomingRest.eventRevision < currentRest.eventRevision) {
+                state = state.copy(restTimer = currentRest)
+            }
             currentState = state
 
             cancelRestTimerCallback()
@@ -223,7 +230,9 @@ class LiveUpdateManager(private val context: Context) {
             LiveActivityRest(
                 restTimerSince = restMap.getDouble("restTimerSince").toLong(),
                 restTimer = restMap.getInt("restTimer"),
-                isAuto = restMap.hasKey("isAuto") && restMap.getBoolean("isAuto")
+                isAuto = restMap.hasKey("isAuto") && restMap.getBoolean("isAuto"),
+                eventId = if (restMap.hasKey("eventId")) restMap.getString("eventId") else null,
+                eventRevision = if (restMap.hasKey("eventRevision")) restMap.getDouble("eventRevision").toLong() else 0
             )
         } else null
 
@@ -285,12 +294,7 @@ class LiveUpdateManager(private val context: Context) {
             currentState?.let { state ->
                 showNotification(state, true)
             }
-            // Unlike iOS (which may be suspended), the foreground service keeps us alive, so an `auto` circuit
-            // can advance to the next set's timer the moment its rest ends. JS reconciles + re-pushes the new
-            // set-timer state; a no-op if there's no next timed set, leaving the expired (red) notification.
-            if (restTimer.isAuto) {
-                emitCheckSetTimer()
-            }
+            emitCheckSetTimer()
         }
         restTimerHandler?.postDelayed(restTimerRunnable!!, delay)
     }
@@ -349,7 +353,7 @@ class LiveUpdateManager(private val context: Context) {
         val entry = state.entry
         val restTimer = state.restTimer
 
-        val restTimerSuffix = if (restTimer != null) {
+        val restTimerSuffix = if (restTimer != null && !isTimerExpired) {
             val minutes = restTimer.restTimer / 60
             val seconds = restTimer.restTimer % 60
             " (${minutes}:${String.format("%02d", seconds)})"
@@ -362,13 +366,9 @@ class LiveUpdateManager(private val context: Context) {
             "All exercises completed!"
         }
 
-        val contentText = buildContentText(entry)
+        val contentText = if (restTimer != null && isTimerExpired) "Rest complete · ready for your next set" else buildContentText(entry)
 
-        val notificationColor = if (isTimerExpired) {
-            Color.RED
-        } else {
-            Color.parseColor("#8364E8")
-        }
+        val notificationColor = Color.parseColor("#8364E8")
 
         val channelId = if (state.ignoreDoNotDisturb) LIVE_UPDATE_CHANNEL_DND_ID else LIVE_UPDATE_CHANNEL_ID
         val builder = NotificationCompat.Builder(context, channelId)
@@ -384,10 +384,10 @@ class LiveUpdateManager(private val context: Context) {
             .setColor(notificationColor)
             .setColorized(false)
 
-        if (restTimer != null) {
+        if (restTimer != null && !isTimerExpired) {
             builder.setUsesChronometer(true)
-            builder.setChronometerCountDown(false)
-            builder.setWhen(restTimer.restTimerSince)
+            builder.setChronometerCountDown(true)
+            builder.setWhen(restTimer.restTimerSince + restTimer.restTimer * 1000L)
         } else {
             builder.setUsesChronometer(true)
             builder.setChronometerCountDown(false)
@@ -402,13 +402,16 @@ class LiveUpdateManager(private val context: Context) {
             builder.setRequestPromotedOngoing(true)
         }
 
-        if (entry != null && restTimer != null) {
+        if (entry != null && restTimer != null && !restTimer.isAuto && !isTimerExpired) {
             val minusIntent = Intent(context, LiveUpdateActionReceiver::class.java).apply {
                 action = LiveUpdateActionReceiver.ACTION_ADJUST_TIMER_MINUS
+                data = android.net.Uri.parse("devfit://rest/${restTimer.eventId}/${restTimer.eventRevision}/${restTimer.restTimerSince + restTimer.restTimer * 1000L}/minus")
                 putExtra(LiveUpdateActionReceiver.EXTRA_ENTRY_INDEX, entry.entryIndex)
                 putExtra(LiveUpdateActionReceiver.EXTRA_SET_INDEX, entry.setIndex)
                 putExtra(LiveUpdateActionReceiver.EXTRA_REST_TIMER, restTimer.restTimer)
                 putExtra(LiveUpdateActionReceiver.EXTRA_REST_TIMER_SINCE, restTimer.restTimerSince)
+                putExtra("restEventId", restTimer.eventId)
+                putExtra("restRevision", restTimer.eventRevision)
             }
             val minusPendingIntent = PendingIntent.getBroadcast(
                 context, 2, minusIntent,
@@ -418,10 +421,13 @@ class LiveUpdateManager(private val context: Context) {
 
             val plusIntent = Intent(context, LiveUpdateActionReceiver::class.java).apply {
                 action = LiveUpdateActionReceiver.ACTION_ADJUST_TIMER_PLUS
+                data = android.net.Uri.parse("devfit://rest/${restTimer.eventId}/${restTimer.eventRevision}/${restTimer.restTimerSince + restTimer.restTimer * 1000L}/plus")
                 putExtra(LiveUpdateActionReceiver.EXTRA_ENTRY_INDEX, entry.entryIndex)
                 putExtra(LiveUpdateActionReceiver.EXTRA_SET_INDEX, entry.setIndex)
                 putExtra(LiveUpdateActionReceiver.EXTRA_REST_TIMER, restTimer.restTimer)
                 putExtra(LiveUpdateActionReceiver.EXTRA_REST_TIMER_SINCE, restTimer.restTimerSince)
+                putExtra("restEventId", restTimer.eventId)
+                putExtra("restRevision", restTimer.eventRevision)
             }
             val plusPendingIntent = PendingIntent.getBroadcast(
                 context, 1, plusIntent,
@@ -718,9 +724,11 @@ class LiveUpdateManager(private val context: Context) {
         notificationManager.cancel(LIVE_UPDATE_NOTIFICATION_ID)
     }
 
-    fun adjustRestTimer(newRestTimer: Int, restTimerSince: Long) {
+    fun adjustRestTimer(newRestTimer: Int, restTimerSince: Long, eventId: String?, deadline: Long, revision: Long) {
         val state = currentState ?: return
-        val updatedRestTimer = LiveActivityRest(restTimerSince, newRestTimer, state.restTimer?.isAuto ?: false)
+        val current = state.restTimer ?: return
+        if (eventId == null || current.eventId != eventId || current.eventRevision != revision || current.restTimerSince + current.restTimer * 1000L != deadline || System.currentTimeMillis() >= deadline) return
+        val updatedRestTimer = LiveActivityRest(restTimerSince, newRestTimer, current.isAuto, eventId, revision + 1)
         currentState = state.copy(restTimer = updatedRestTimer)
 
         cancelRestTimerCallback()

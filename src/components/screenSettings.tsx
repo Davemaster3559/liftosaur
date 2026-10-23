@@ -8,6 +8,7 @@ import {
   Thunk_exportStorage,
   Thunk_exportHistoryToCSV,
   Thunk_exportProgramsToText,
+  Thunk_playAudioNotification,
 } from "../ducks/thunks";
 import { MenuItemEditable } from "./menuItemEditable";
 import { lb } from "lens-shmens";
@@ -311,6 +312,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
       {(Platform.OS === "ios" || Platform.OS === "android") && (
         <View>
           <GroupHeader name="Sound" topPadding={true} />
+          <MenuItem name="Test rest sound" onClick={() => props.dispatch(Thunk_playAudioNotification())} />
           <MenuItemEditable
             type="boolean"
             name="Vibration"
@@ -399,7 +401,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
         value={String(Cycle_setting(props.settings.devfitCycleDays, 14))}
         maxLength={2}
         onChange={(value) => {
-          if (value && Number.isFinite(Number(value)))
+          if (value && Number.isFinite(Number(value))) {
             props.dispatch({
               type: "UpdateSettings",
               lensRecording: lb<ISettings>()
@@ -407,6 +409,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
                 .record(Cycle_setting(Number(value), 14)),
               desc: "Change training cycle length",
             });
+          }
         }}
       />
       <MenuItemEditable
@@ -415,7 +418,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
         value={String(Cycle_setting(props.settings.devfitCycleTarget, 4))}
         maxLength={2}
         onChange={(value) => {
-          if (value && Number.isFinite(Number(value)))
+          if (value && Number.isFinite(Number(value))) {
             props.dispatch({
               type: "UpdateSettings",
               lensRecording: lb<ISettings>()
@@ -423,6 +426,7 @@ function ScreenSettingsInner(props: IProps): JSX.Element {
                 .record(Cycle_setting(Number(value), 4)),
               desc: "Change training cycle target",
             });
+          }
         }}
       />
       <GroupHeader name="Appearance" topPadding={true} />

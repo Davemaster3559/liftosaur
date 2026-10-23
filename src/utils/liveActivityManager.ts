@@ -210,6 +210,8 @@ export function LiveActivityManager_updateLiveActivity(
             restTimerSince: restTimerSince ?? progress.timerSince,
             restTimer: restTimer ?? progress.timer,
             isAuto: !!restingSet?.auto,
+            eventId: progress.devfitRestEvent?.id,
+            eventRevision: progress.devfitRestEvent?.revision,
           }
         : undefined,
     ignoreDoNotDisturb: !!settings.ignoreDoNotDisturb,

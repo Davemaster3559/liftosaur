@@ -1,56 +1,41 @@
 import { JSX, useState } from "react";
-import { View, TextInput } from "react-native";
+import { Pressable, View } from "react-native";
 import { Text } from "../components/primitives/text";
 import { IHistoryRecord, ISettings } from "../types";
 import { ICardioActivity } from "./cardioSchema";
 import {
-  CARDIO_FIELDS,
-  CARDIO_PRESETS,
   CardioForm_submission,
   CardioForm_draft,
   CardioForm_kind,
+  CardioForm_trainingPreview,
   ICardioDraft,
+  ICardioPreset,
 } from "./cardioForm";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { DevFitAction, DevFitColumns, DevFitSurface, DevFitTitle } from "./ui";
+import { DevFitField } from "./field";
+import { DevFitCardioDetails } from "./cardioDetails";
+import { Dates_add, Dates_day, Dates_label } from "./dates";
+import { ITrainingDate, TrainingDate_key } from "./trainingDates";
 
-export function DevFitField(props: {
-  label: string;
-  value: string;
-  onChange: (s: string) => void;
-  numeric?: boolean;
-  testID?: string;
-  editable?: boolean;
-}): JSX.Element {
-  const c = Tailwind_semantic().devfit;
-  return (
-    <View style={{ gap: 6, flexGrow: 1, minWidth: 120 }}>
-      <Text className="text-sm" style={{ color: c.muted }}>
-        {props.label}
-      </Text>
-      <TextInput
-        accessibilityLabel={props.label}
-        testID={props.testID}
-        value={props.value}
-        onChangeText={props.onChange}
-        editable={props.editable}
-        keyboardType={props.numeric ? "decimal-pad" : "default"}
-        autoCapitalize="none"
-        placeholder="Not recorded"
-        placeholderTextColor={c.muted}
-        style={{
-          color: c.ink,
-          backgroundColor: c.surface,
-          borderColor: c.line,
-          borderWidth: 1,
-          borderRadius: 12,
-          minHeight: 52,
-          padding: 12,
-        }}
-      />
-    </View>
-  );
-}
+export { DevFitField } from "./field";
+
+const machines: { preset: ICardioPreset; label: string }[] = [
+  { preset: "Treadmill", label: "Treadmill" },
+  { preset: "Bike", label: "Bike" },
+  { preset: "Stairs", label: "Stairs" },
+  { preset: "Row", label: "Row" },
+  { preset: "Elliptical", label: "Elliptical" },
+  { preset: "Other", label: "Other" },
+];
+const intentions = [
+  ["general", "General"],
+  ["run_a", "Run A"],
+  ["run_b", "Run B"],
+  ["incline_walk", "Incline walk"],
+  ["endurance", "Endurance"],
+  ["recovery", "Recovery"],
+] as const;
 
 export function DevFitCardioActivityForm(props: {
   settings: ISettings;
@@ -58,17 +43,32 @@ export function DevFitCardioActivityForm(props: {
   zone: string;
   activity?: ICardioActivity;
   recordId?: number;
-  onSave: (activity: ICardioActivity) => void;
+  onSave: (activity: ICardioActivity, trainingDate?: ITrainingDate) => void;
   onCancel: () => void;
   mode?: "live" | "manual";
+  trainingDate?: ITrainingDate;
+  rolloverMinutes?: number;
 }): JSX.Element {
   const c = Tailwind_semantic().devfit;
-  const [draft, setDraft] = useState(() => CardioForm_draft(props.zone, Date.now(), props.activity));
-  const [details, setDetails] = useState(!!props.activity);
+  const [draft, setDraft] = useState(() =>
+    CardioForm_draft(props.zone, Date.now(), props.activity, props.trainingDate, props.rolloverMinutes)
+  );
+  const [details, setDetails] = useState(false);
+  const [dates, setDates] = useState(false);
+  const [session, setSession] = useState(false);
   const [error, setError] = useState<string>();
   const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const kind = CardioForm_kind(draft.preset);
+  const intention =
+    draft.intention ??
+    (draft.preset === "Run A"
+      ? "run_a"
+      : draft.preset === "Run B"
+        ? "run_b"
+        : draft.preset === "Incline walk"
+          ? "incline_walk"
+          : "general");
   function patch(p: Partial<ICardioDraft>): void {
     setDraft((d) => ({ ...d, ...p }));
     setDuplicateConfirmed(false);
@@ -89,229 +89,240 @@ export function DevFitCardioActivityForm(props: {
       setError(result.error);
       return;
     }
-    props.onSave(result.activity);
+    props.onSave(result.activity, result.trainingDate);
   }
+  const chosenDate = draft.trainingMode === "training" ? (draft.trainingDate ?? draft.date) : draft.date;
+  const preview = CardioForm_trainingPreview(draft);
+  const today = TrainingDate_key(Date.now(), draft.zone, draft.rolloverMinutes ?? 0);
   return (
     <View testID="devfit-cardio-form" style={{ gap: 16 }}>
       <DevFitTitle
-        title={
-          props.mode === "live" ? "Your actual session" : props.recordId ? "Edit past activity" : "Log past activity"
+        title={props.mode === "live" ? "Finish cardio" : props.recordId ? "Edit past activity" : "Log cardio"}
+        subtitle={
+          props.mode === "live"
+            ? "Confirm machine distance. Other measurements are optional."
+            : "Save a past activity · no live timer"
         }
-        subtitle="Date, activity and actual minutes are all you need. Other fields are optional."
       />
       <DevFitColumns
         primary={
           <DevFitSurface>
-            <DevFitField
-              label="Performed date (YYYY-MM-DD)"
-              testID="cardio-date"
-              editable={props.mode !== "live"}
-              value={draft.date}
-              onChange={(date) => patch({ date })}
-            />
             {props.mode !== "live" && (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {CARDIO_PRESETS.map((preset) => (
-                  <DevFitAction
-                    key={preset}
-                    label={`${preset}${draft.preset === preset ? " ✓" : ""}`}
-                    secondary
-                    onPress={() => patch({ preset })}
-                  />
-                ))}
-              </View>
-            )}
-            <DevFitField
-              label="Actual duration (minutes)"
-              testID="cardio-minutes"
-              editable={props.mode !== "live"}
-              numeric
-              value={draft.minutes}
-              onChange={(minutes) => patch({ minutes })}
-            />
-            <DevFitAction
-              label={details ? "Hide optional details" : "Add optional details"}
-              secondary
-              onPress={() => setDetails(!details)}
-            />
-            {details && (
               <>
-                <DevFitField
-                  label="Time (HH:MM, optional)"
-                  editable={props.mode !== "live"}
-                  value={draft.time}
-                  onChange={(time) => patch({ time })}
+                <DevFitAction
+                  secondary
+                  label={
+                    draft.trainingMode === "legacy"
+                      ? "Confirm this activity's training date"
+                      : (draft.trainingMode === "actual" ? "Actual start · " : "Training date · ") +
+                        (Dates_day(chosenDate) != null ? Dates_label(chosenDate) : "Choose date")
+                  }
+                  onPress={() => setDates(!dates)}
                 />
-                <DevFitField
-                  label="Home time zone"
-                  editable={props.mode !== "live"}
-                  value={draft.zone}
-                  onChange={(zone) => patch({ zone })}
-                />
-                <DevFitField
-                  label="Machine / model (optional)"
-                  value={draft.fields.profile ?? ""}
-                  onChange={(s) => field("profile", s)}
-                />
-              </>
-            )}
-            {(details || props.mode === "live") && (
-              <>
-                {kind !== "stair_climber" && (
-                  <>
-                    <DevFitField
-                      label={kind === "stationary_bike" ? "Machine virtual distance" : "Machine distance"}
-                      numeric
-                      value={draft.fields.distance ?? ""}
-                      onChange={(s) => field("distance", s)}
-                    />
-                    <DevFitAction
-                      label={`Distance unit: ${draft.distanceUnit}`}
-                      secondary
-                      onPress={() => patch({ distanceUnit: draft.distanceUnit === "km" ? "mi" : "km" })}
-                    />
-                  </>
-                )}
-                <DevFitField
-                  label="Effort RPE (1–10)"
-                  numeric
-                  value={draft.fields.rpe ?? ""}
-                  onChange={(s) => field("rpe", s)}
-                />
-              </>
-            )}
-          </DevFitSurface>
-        }
-        secondary={
-          details || props.mode === "live" ? (
-            <DevFitSurface>
-              {kind === "treadmill" && (
-                <>
-                  <DevFitAction
-                    label={draft.detailed ? "Use quick summary" : "Use detailed phases"}
-                    secondary
-                    onPress={() => patch({ detailed: !draft.detailed })}
-                  />
-                  <DevFitAction
-                    label={`Summary speed unit: ${draft.speedUnit === "mph" ? "mph" : "km/h"}`}
-                    secondary
-                    onPress={() => patch({ speedUnit: draft.speedUnit === "mph" ? "kmh" : "mph" })}
-                  />
-                  <Text style={{ color: c.muted }}>
-                    Incline is percent grade. Enter settings actually used. Longest jog stays unknown unless you
-                    remember it or record phases.
-                  </Text>
-                </>
-              )}
-              {CARDIO_FIELDS[kind]
-                .filter(
-                  ([key]) =>
-                    !(
-                      kind === "treadmill" &&
-                      draft.detailed &&
-                      ["walkMinutes", "jogMinutes", "longestMinutes"].includes(key)
-                    )
-                )
-                .map(([key, label]) => (
-                  <DevFitField
-                    key={key}
-                    label={label}
-                    value={draft.fields[key] ?? ""}
-                    numeric={!["level", "resistance", "damper", "name"].includes(key)}
-                    onChange={(s) => field(key, s)}
-                  />
-                ))}
-              {kind === "treadmill" && draft.detailed && (
-                <>
-                  {draft.segments.map((segment, index) => (
-                    <DevFitSurface key={index}>
-                      <Text style={{ color: c.ink }}>Phase {index + 1}</Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                        {(["walk", "jog", "run", "recovery", "other"] as const).map((phase) => (
-                          <DevFitAction
-                            key={phase}
-                            label={`${phase}${phase === segment.phase ? " ✓" : ""}`}
-                            secondary
-                            onPress={() =>
-                              patch({ segments: draft.segments.map((p, i) => (i === index ? { ...p, phase } : p)) })
-                            }
-                          />
-                        ))}
-                      </View>
-                      {(
-                        [
-                          ["minutes", "Phase minutes"],
-                          ["speed", "Phase speed"],
-                          ["incline", "Phase incline (%)"],
-                          ["distance", "Phase measured distance (meters)"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <DevFitField
-                          key={key}
-                          label={`${label} ${index + 1}`}
-                          numeric
-                          value={segment[key]}
-                          onChange={(s) =>
-                            patch({ segments: draft.segments.map((p, i) => (i === index ? { ...p, [key]: s } : p)) })
-                          }
-                        />
-                      ))}
+                {dates && (
+                  <View style={{ gap: 12 }}>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       <DevFitAction
-                        label={`Phase ${index + 1} speed unit: ${segment.unit}`}
                         secondary
+                        label={"Training date" + (draft.trainingMode === "training" ? " ✓" : "")}
                         onPress={() =>
-                          patch({
-                            segments: draft.segments.map((p, i) =>
-                              i === index ? { ...p, unit: p.unit === "mph" ? "kmh" : "mph" } : p
-                            ),
-                          })
+                          patch({ trainingMode: "training", trainingDate: draft.trainingDate ?? draft.date })
                         }
                       />
                       <DevFitAction
-                        label={`Remove phase ${index + 1}`}
                         secondary
-                        onPress={() => patch({ segments: draft.segments.filter((_, i) => i !== index) })}
+                        label={"Actual date and time" + (draft.trainingMode === "actual" ? " ✓" : "")}
+                        onPress={() => patch({ trainingMode: "actual" })}
                       />
-                    </DevFitSurface>
+                    </View>
+                    <DevFitField
+                      label={
+                        draft.trainingMode === "training" ? "Training date (YYYY-MM-DD)" : "Actual date (YYYY-MM-DD)"
+                      }
+                      testID="cardio-date"
+                      value={chosenDate}
+                      onChange={(date) =>
+                        draft.trainingMode === "training"
+                          ? patch({ trainingDate: date, ...(!props.activity ? { date } : {}) })
+                          : patch({ date })
+                      }
+                    />
+                    {draft.trainingMode === "training" && (
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <DevFitAction
+                          secondary
+                          label="Today"
+                          onPress={() => patch({ trainingDate: today, ...(!props.activity ? { date: today } : {}) })}
+                        />
+                        <DevFitAction
+                          secondary
+                          label="Previous training day"
+                          onPress={() =>
+                            patch({
+                              trainingDate: Dates_add(today, -1),
+                              ...(!props.activity ? { date: Dates_add(today, -1) } : {}),
+                            })
+                          }
+                        />
+                      </View>
+                    )}
+                    {draft.trainingMode === "actual" && (
+                      <>
+                        <DevFitField
+                          label="Actual start (HH:MM)"
+                          value={draft.time}
+                          onChange={(time) => patch({ time })}
+                        />
+                        <Text style={{ color: c.muted }}>
+                          {preview
+                            ? "Counts toward training date " + preview
+                            : "Enter the actual time to preview its training date."}
+                        </Text>
+                      </>
+                    )}
+                    {draft.trainingMode === "legacy" && (
+                      <Text style={{ color: c.muted }}>
+                        The original date-only record stays unchanged. Choose Training date to confirm its intended day,
+                        or enter a known actual start.
+                      </Text>
+                    )}
+                    <Text className="text-xs" style={{ color: c.muted }}>
+                      Home calendar · {draft.zone}. Day changes at {Math.floor((draft.rolloverMinutes ?? 0) / 60)}:00.
+                    </Text>
+                  </View>
+                )}
+                <Text className="text-xs font-bold" style={{ color: c.muted }}>
+                  MACHINE
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {machines.map((machine) => (
+                    <Pressable
+                      key={machine.preset}
+                      accessibilityRole="button"
+                      accessibilityLabel={machine.label}
+                      accessibilityState={{ selected: kind === CardioForm_kind(machine.preset) }}
+                      onPress={() => patch({ preset: machine.preset, intention: "general" })}
+                      style={{
+                        minHeight: 48,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: kind === CardioForm_kind(machine.preset) ? c.cardio : c.line,
+                        backgroundColor: kind === CardioForm_kind(machine.preset) ? c.cardiosoft : c.surface,
+                      }}
+                    >
+                      <Text style={{ color: kind === CardioForm_kind(machine.preset) ? c.cardio : c.muted }}>
+                        {machine.label}
+                      </Text>
+                    </Pressable>
                   ))}
-                  <DevFitAction
-                    label="Add phase"
-                    secondary
-                    onPress={() =>
-                      patch({
-                        segments: [
-                          ...draft.segments,
-                          { phase: "walk", minutes: "", speed: "", unit: draft.speedUnit, incline: "", distance: "" },
-                        ],
-                      })
+                </View>
+                <DevFitAction
+                  secondary
+                  label={"Session · " + (intentions.find(([key]) => key === intention)?.[1] ?? "General") + " · Change"}
+                  onPress={() => setSession(!session)}
+                />
+                {session && (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {intentions
+                      .filter(
+                        ([key]) =>
+                          kind === "treadmill" || (key !== "run_a" && key !== "run_b" && key !== "incline_walk")
+                      )
+                      .map(([key, label]) => (
+                        <DevFitAction
+                          key={key}
+                          label={label + (key === intention ? " ✓" : "")}
+                          secondary
+                          onPress={() => {
+                            patch({ intention: key });
+                            setSession(false);
+                          }}
+                        />
+                      ))}
+                  </View>
+                )}
+              </>
+            )}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              <View style={{ flex: 1, minWidth: 120 }}>
+                <DevFitField
+                  label="Actual duration (mm:ss)"
+                  testID="cardio-minutes"
+                  editable={props.mode !== "live"}
+                  value={draft.minutes}
+                  onChange={(minutes) => patch({ minutes })}
+                  placeholder="30:32"
+                />
+              </View>
+              {kind !== "stair_climber" && (
+                <View style={{ flex: 1, minWidth: 120 }}>
+                  <DevFitField
+                    label={
+                      (kind === "stationary_bike" ? "Virtual distance" : "Machine distance") +
+                      " (" +
+                      draft.distanceUnit +
+                      ")"
                     }
+                    numeric
+                    value={draft.fields.distance ?? ""}
+                    onChange={(s) => field("distance", s)}
                   />
-                </>
+                </View>
               )}
-              <DevFitField label="Notes" value={draft.fields.notes ?? ""} onChange={(s) => field("notes", s)} />
+            </View>
+            {kind !== "stair_climber" && (
+              <DevFitAction
+                label={"Distance unit: " + draft.distanceUnit}
+                secondary
+                onPress={() => patch({ distanceUnit: draft.distanceUnit === "km" ? "mi" : "km" })}
+              />
+            )}
+            {error && (
+              <Text accessibilityRole="alert" style={{ color: c.accent }}>
+                {error}
+              </Text>
+            )}
+            {duplicateWarning && (
+              <View style={{ gap: 8 }}>
+                <Text style={{ color: c.ink }}>
+                  A similar activity is already recorded on this date. Two sessions are allowed.
+                </Text>
+                <DevFitAction
+                  label={duplicateConfirmed ? "Separate activity confirmed ✓" : "This is a separate activity"}
+                  secondary
+                  onPress={() => setDuplicateConfirmed(true)}
+                />
+              </View>
+            )}
+            <DevFitAction
+              label={props.mode === "live" ? "Save cardio details" : "Save activity"}
+              testID="cardio-save"
+              onPress={save}
+            />
+            <DevFitAction
+              label={
+                details
+                  ? "Hide optional details"
+                  : kind === "treadmill"
+                    ? "Walk/jog phases, incline & machine details"
+                    : "Machine details, effort & notes"
+              }
+              secondary
+              onPress={() => setDetails(!details)}
+            />
+            <DevFitAction label="Cancel" secondary onPress={props.onCancel} />
+          </DevFitSurface>
+        }
+        secondary={
+          details ? (
+            <DevFitSurface>
+              <DevFitCardioDetails draft={draft} patch={patch} field={field} />
             </DevFitSurface>
           ) : undefined
         }
       />
-      {error && (
-        <Text accessibilityRole="alert" style={{ color: c.accent }}>
-          {error}
-        </Text>
-      )}
-      {duplicateWarning && (
-        <DevFitSurface>
-          <Text style={{ color: c.ink }}>
-            A similar activity is already recorded on this date. Two sessions are allowed.
-          </Text>
-          <DevFitAction
-            label={duplicateConfirmed ? "Separate activity confirmed ✓" : "This is a separate activity"}
-            secondary
-            onPress={() => setDuplicateConfirmed(true)}
-          />
-        </DevFitSurface>
-      )}
-      <DevFitAction label="Save activity" testID="cardio-save" onPress={save} />
-      <DevFitAction label="Cancel" secondary onPress={props.onCancel} />
     </View>
   );
 }

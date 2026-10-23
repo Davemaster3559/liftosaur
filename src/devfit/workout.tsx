@@ -1,3 +1,4 @@
+import { DevFitWorkoutBrief } from "./workoutBrief";
 import { JSX, ReactNode, memo, useCallback, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 import { lb } from "lens-shmens";
@@ -14,24 +15,20 @@ import { updateProgress } from "../models/state";
 import { useRem } from "../utils/useRem";
 import { Tailwind_semantic } from "../utils/tailwindConfig";
 import { WorkoutFocus_active, WorkoutFocus_sets } from "./workoutFocus";
-import {
-  Session_cardioCoaching,
-  Session_cardioIntent,
-  Session_completion,
-  Session_exerciseKind,
-  Session_minutes,
-  Session_displayName,
-} from "./presentation";
+import { Session_completion, Session_exerciseKind, Session_displayName } from "./presentation";
 import { Thunk_pauseWorkout, Thunk_pushExerciseStatsScreen, Thunk_pushToEditProgramExercise } from "../ducks/thunks";
-import { Progression_brief, Progression_sets } from "./progression";
+import { Progression_rule } from "./progression";
+import { Milestones_why } from "./milestones";
+import { DevFitSetComparison } from "./setComparison";
+import { DevFitTargetSetup } from "./targetSetup";
+import { DevFitTrainingDateChoice } from "./trainingDateChoice";
+import { Cardio_prescriptionName } from "./cardio";
 import { DevFitActiveSet } from "./activeSet";
 import { DevFitWorkoutClock } from "./workoutClock";
 import { DevFitRestPanel } from "./restPanel";
 import { DevFitAction, DevFitBar, DevFitColumns, DevFitSection, DevFitSurface, DevFitTag, DevFitTitle } from "./ui";
 import { DevFitPage } from "./page";
 import { DevFitRecordedCardio } from "./recordedCardio";
-
-const renderActiveSet = (props: Parameters<typeof DevFitActiveSet>[0]): JSX.Element => <DevFitActiveSet {...props} />;
 
 export const DevFitWorkout = memo(function DevFitWorkout(props: {
   progress: IHistoryRecord;
@@ -66,6 +63,7 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
   const entryIndex = Math.min(progress.currentEntryIndex ?? 0, Math.max(0, progress.entries.length - 1));
   const entry = progress.entries[entryIndex];
   const [selected, setSelected] = useState<{ entryId: string; setId: string }>();
+  const [why, setWhy] = useState(false);
   const sameDay = useMemo(
     () => ({ programId: progress.programId, day: progress.day, week: progress.week, dayInWeek: progress.dayInWeek }),
     [progress.programId, progress.day, progress.week, progress.dayInWeek]
@@ -91,14 +89,13 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
   const active = WorkoutFocus_active(entry, selected?.entryId === entry.id ? selected.setId : undefined);
   const kind = Session_exerciseKind(programExercise, entry, settings);
   const cardio = kind === "running" || kind === "cardio";
-  const cardioCoaching = cardio ? Session_cardioCoaching(programExercise, entry, settings) : undefined;
   const allSets = WorkoutFocus_sets(entry);
+  const milestone = props.program?.devfitPlan?.targets[entry.programExerciseId ?? ""];
   return (
     <DevFitPage testID="devfit-workout">
       <DevFitTitle
-        eyebrow={progress.programName}
         title={progress.dayName || "Your workout"}
-        subtitle={`${completion.completed} of ${completion.total} sets logged · saved on this device`}
+        subtitle={`${completion.completed} / ${completion.total} sets · saved on device`}
         action={props.menu}
       />
       <DevFitWorkoutClock progress={progress} onPauseResume={handlePauseResume} />
@@ -113,7 +110,7 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                 onPress={() => props.dispatch(Thunk_pushExerciseStatsScreen(entry.exercise))}
                 style={{ backgroundColor: c.surface, borderRadius: 18, padding: 4 }}
               >
-                <ExerciseImage exerciseType={entry.exercise} settings={settings} size="small" width={88} />
+                <ExerciseImage exerciseType={entry.exercise} settings={settings} size="small" width={60} />
               </Pressable>
               <View style={{ flex: 1, gap: 6 }}>
                 <DevFitTag
@@ -127,9 +124,11 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                   cardio={cardio}
                 />
                 <Text className="text-2xl font-bold" style={{ color: c.ink }}>
-                  {Session_displayName(programExercise?.label || exercise.name)}
+                  {entry.devfitCardioPrescription
+                    ? Cardio_prescriptionName(entry.devfitCardioPrescription)
+                    : Session_displayName(programExercise?.label || exercise.name)}
                 </Text>
-                {programExercise?.label && (
+                {programExercise?.label && !entry.devfitCardioPrescription && (
                   <Text className="text-sm" style={{ color: c.muted }}>
                     {exercise.name}
                   </Text>
@@ -137,64 +136,39 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                 {entry.superset && <DevFitTag label={`Superset · ${entry.superset}`} />}
               </View>
             </View>
-            <DevFitRestPanel progress={progress} settings={settings} dispatch={props.dispatch} />
-            {cardio && (
-              <DevFitSurface testID="devfit-cardio-summary-card">
-                <Text className="font-semibold" style={{ color: c.cardio }}>
-                  {kind === "running" ? "Your running session" : "Your cardio session"}
-                </Text>
-                <Text className="text-sm" style={{ color: c.muted }}>
-                  {Session_cardioIntent(programExercise, entry, settings)}
-                </Text>
-                {cardioCoaching && (
-                  <View style={{ gap: 8, paddingTop: 4 }}>
-                    <View style={{ gap: 2 }}>
-                      <Text className="text-xs font-bold" style={{ color: c.cardio }}>
-                        1. Warm-up
-                      </Text>
-                      <Text className="text-sm" style={{ color: c.ink }}>
-                        {cardioCoaching.warmup}
-                      </Text>
-                    </View>
-                    <View style={{ gap: 2 }}>
-                      <Text className="text-xs font-bold" style={{ color: c.cardio }}>
-                        2. Main target
-                      </Text>
-                      <Text className="text-sm" style={{ color: c.ink }}>
-                        {cardioCoaching.mainTarget}
-                      </Text>
-                    </View>
-                    <View style={{ gap: 2 }}>
-                      <Text className="text-xs font-bold" style={{ color: c.cardio }}>
-                        3. Progression Rule
-                      </Text>
-                      <Text className="text-sm" style={{ color: c.ink }}>
-                        {cardioCoaching.progressionRule}
-                      </Text>
-                    </View>
-                    {cardioCoaching.recovery && (
-                      <Text className="text-sm" style={{ color: c.ink }}>
-                        Recovery: {cardioCoaching.recovery}
-                      </Text>
-                    )}
-                    {cardioCoaching.then && (
-                      <Text className="text-sm" style={{ color: c.ink }}>
-                        Then: {cardioCoaching.then}
-                      </Text>
-                    )}
-                  </View>
+            {!cardio && (
+              <>
+                <DevFitSetComparison
+                  entry={entry}
+                  previous={lastEntry}
+                  activeId={active?.set.id}
+                  onSelect={(setId) => setSelected({ entryId: entry.id, setId })}
+                />
+                <DevFitAction
+                  secondary
+                  label={why ? "Close target explanation" : "Why this target?"}
+                  testID="devfit-view-progression"
+                  onPress={() => setWhy(!why)}
+                />
+                {why && (
+                  <Text style={{ color: c.muted }}>
+                    {milestone ? Milestones_why(entry, milestone) : Progression_rule(programExercise)}
+                  </Text>
                 )}
-                {entry.sets.some((s) => s.label) && (
-                  <View style={{ gap: 8 }}>
-                    {entry.sets.map((s, i) => (
-                      <Text key={s.id} className="text-sm" style={{ color: s.isCompleted ? c.success : c.muted }}>
-                        {s.isCompleted ? "✓" : `${i + 1}.`} {s.label || "Work"} · {Session_minutes(s.setTimer ?? 0)}
-                      </Text>
-                    ))}
-                  </View>
+                {milestone && props.program && (
+                  <DevFitTargetSetup
+                    key={`${props.program.id}:${entry.programExerciseId}`}
+                    programId={props.program.id}
+                    exerciseKey={entry.programExerciseId!}
+                    target={milestone}
+                    dispatch={props.dispatch}
+                    label={`Target stage · ${milestone.reps} reps · 8 → 10 → 12 → 15`}
+                  />
                 )}
-              </DevFitSurface>
+              </>
             )}
+            <DevFitRestPanel progress={progress} settings={settings} dispatch={props.dispatch} />
+            {cardio && <DevFitWorkoutBrief entry={entry} exercise={programExercise} settings={settings} />}
             {History_isActivelyPaused(progress.intervals) ? (
               <DevFitSurface>
                 <Text style={{ color: c.muted }}>
@@ -202,11 +176,18 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                 </Text>
                 <DevFitAction label="Resume workout" onPress={handlePauseResume} />
               </DevFitSurface>
+            ) : milestone && !milestone.calibrated ? (
+              <DevFitSurface>
+                <Text style={{ color: c.ink }}>
+                  Confirm this exercise's available working load above before logging the first set. This keeps the old
+                  machine's load separate.
+                </Text>
+              </DevFitSurface>
             ) : active ? (
               <WorkoutExerciseSet
                 key={active.set.id}
                 progressId={progress.id}
-                renderBody={renderActiveSet}
+                renderBody={(bodyProps) => <DevFitActiveSet {...bodyProps} loadStep={milestone?.step} />}
                 preserveRest={selected?.entryId === entry.id}
                 isExpanded
                 isNext
@@ -299,34 +280,17 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
         }
         secondary={
           <>
-            <DevFitSection title="Last / Today / Next">
+            <DevFitSection title="Exercise tools">
               <DevFitSurface testID="devfit-progression">
-                {[
-                  { label: "LAST", value: Progression_sets(lastEntry, true, settings.units) },
-                  { label: "TODAY", value: Progression_sets(entry, false, settings.units) },
-                  { label: "NEXT", value: Progression_brief(programExercise) },
-                ].map((item) => (
-                  <View key={item.label} style={{ gap: 6 }}>
-                    <Text
-                      className="text-xs font-bold"
-                      style={{ color: item.label === "NEXT" ? c.success : c.accent, letterSpacing: 1.5 }}
-                    >
-                      {item.label}
-                    </Text>
-                    <Text className="text-sm" style={{ color: c.ink }}>
-                      {item.value}
-                    </Text>
-                  </View>
-                ))}
                 <DevFitAction
                   label="Exercise details & history"
                   secondary
                   onPress={() => props.dispatch(Thunk_pushExerciseStatsScreen(entry.exercise))}
                 />
-                {programExercise && (
+                {programExercise && !milestone && (
                   <DevFitAction
-                    label="View progression rule"
-                    testID="devfit-view-progression"
+                    label="Edit progression"
+                    testID="devfit-edit-progression"
                     secondary
                     onPress={() =>
                       props.dispatch(
@@ -339,6 +303,7 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                 )}
               </DevFitSurface>
             </DevFitSection>
+            <DevFitTrainingDateChoice record={progress} dispatch={props.dispatch} />
             <DevFitSection title="Session lineup" detail={`${progress.entries.length} exercises`}>
               {progress.entries.map((e, i) => {
                 const done = Session_completion([e]);
@@ -366,7 +331,10 @@ export const DevFitWorkout = memo(function DevFitWorkout(props: {
                     }}
                   >
                     <Text className="font-semibold" style={{ color: c.ink }}>
-                      {String(i + 1).padStart(2, "0")} {Exercise_get(e.exercise, settings.exercises).name}
+                      {String(i + 1).padStart(2, "0")}{" "}
+                      {e.devfitCardioPrescription
+                        ? Cardio_prescriptionName(e.devfitCardioPrescription)
+                        : Exercise_get(e.exercise, settings.exercises).name}
                     </Text>
                     <Text className="text-xs" style={{ color: done.completed === done.total ? c.success : c.muted }}>
                       {done.completed === done.total ? "✓ Complete" : `${done.completed} / ${done.total} sets`}

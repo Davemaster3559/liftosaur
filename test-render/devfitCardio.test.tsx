@@ -45,7 +45,7 @@ describe("DevFit past cardio through the native application", () => {
       await app.press("set-timer-stop-record");
       await app.settle();
       expect(screen.getByTestId("devfit-cardio-form")).toBeTruthy();
-      expect(screen.getByTestId("cardio-date").props.editable).toBe(false);
+      expect(screen.queryByTestId("cardio-date")).toBeNull();
       expect(screen.getByTestId("cardio-minutes").props.editable).toBe(false);
       await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
       await app.settle();
@@ -71,10 +71,12 @@ describe("DevFit past cardio through the native application", () => {
       try {
         const beforeEffects = bridges.log.names().filter((s) => /^(timer|workout)\./.test(s));
         await app.press("devfit-log-past");
+        await fireEvent.press(screen.getByRole("button", { name: /^Training date ·/ }));
         await fireEvent.changeText(screen.getByTestId("cardio-date"), "2026-10-16");
+        await fireEvent.press(screen.getByRole("button", { name: /^Session ·.*Change$/ }));
         await fireEvent.press(screen.getByRole("button", { name: "Run A" }));
         await fireEvent.changeText(screen.getByTestId("cardio-minutes"), "30");
-        await fireEvent.press(screen.getByRole("button", { name: "Add optional details" }));
+        await fireEvent.press(screen.getByRole("button", { name: "Walk/jog phases, incline & machine details" }));
         await fireEvent.changeText(screen.getByLabelText("Walking minutes"), "16");
         await fireEvent.changeText(screen.getByLabelText("Jog / run minutes"), "14");
         await fireEvent.changeText(screen.getByLabelText("Longest uninterrupted jog (minutes)"), "8");
@@ -83,16 +85,18 @@ describe("DevFit past cardio through the native application", () => {
         await app.press("cardio-save");
         await app.settle();
         expect(screen.getByText("Manually logged · local only")).toBeTruthy();
-        expect(screen.getByText("30 min")).toBeTruthy();
-        expect(screen.getByText("8 min")).toBeTruthy();
+        expect(screen.getByText("30:00")).toBeTruthy();
+        expect(screen.getByText("8:00")).toBeTruthy();
         expect(screen.getByText(`${Dates_label("2026-10-16")} · date only`)).toBeTruthy();
         await fireEvent.press(screen.getByRole("button", { name: "Edit activity" }));
+        await fireEvent.press(screen.getByRole("button", { name: /^Training date ·/ }));
         expect(screen.getByTestId("cardio-date").props.value).toBe("2026-10-16");
+        await fireEvent.press(screen.getByRole("button", { name: "Walk/jog phases, incline & machine details" }));
         expect(screen.getByLabelText("Jog incline (%)").props.value).toBe("3.5");
         await fireEvent.changeText(screen.getByTestId("cardio-minutes"), "32");
         await app.press("cardio-save");
         await app.settle();
-        expect(screen.getByText("32 min")).toBeTruthy();
+        expect(screen.getByText("32:00")).toBeTruthy();
         expect(bridges.log.names().filter((s) => /^(timer|workout)\./.test(s))).toEqual(beforeEffects);
         expect(saveHealth).not.toHaveBeenCalled();
         await fireEvent.press(screen.getByRole("button", { name: "Delete activity" }));
@@ -123,6 +127,7 @@ describe("DevFit past cardio through the native application", () => {
       expect(screen.getByTestId("devfit-log-past")).toBeTruthy();
       await app.tapFooter("graphs");
       expect(screen.getByTestId("devfit-log-past")).toBeTruthy();
+      await fireEvent.press(screen.getByRole("button", { name: "Explore Strength · Cardio · Body trends" }));
       await fireEvent.press(screen.getByRole("button", { name: "Stairs" }));
       expect(screen.getByRole("button", { name: "Reported steps" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Virtual distance (km)" })).toBeNull();

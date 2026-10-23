@@ -2,6 +2,10 @@
 
 Those exercises are available in the app by default, prefer to use them if possible when you build a program:
 
+Stair Climber
+Other Cardio
+Incline Treadmill Walk
+Stationary Bike
 Ab Wheel
 Arch Hang
 Archer Pull Up

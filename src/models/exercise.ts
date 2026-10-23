@@ -1463,6 +1463,24 @@ export const allExercisesList: Record<IExerciseId, IExercise> = {
     startingWeightLb: { value: 35, unit: "lb" },
     startingWeightKg: { value: 15, unit: "kg" },
   },
+  stairClimber: {
+    id: "stairClimber",
+    name: "Stair Climber",
+    defaultWarmup: 0,
+    defaultEquipment: "leverageMachine",
+    types: [],
+    startingWeightLb: { value: 0, unit: "lb" },
+    startingWeightKg: { value: 0, unit: "kg" },
+  },
+  otherCardio: {
+    id: "otherCardio",
+    name: "Other Cardio",
+    defaultWarmup: 0,
+    defaultEquipment: "leverageMachine",
+    types: [],
+    startingWeightLb: { value: 0, unit: "lb" },
+    startingWeightKg: { value: 0, unit: "kg" },
+  },
   stationaryBike: {
     id: "stationaryBike",
     name: "Stationary Bike",
@@ -3576,6 +3594,8 @@ export const metadata: Record<IExerciseId, IMetaExercises> = {
     bodyParts: ["Calves"],
     sortedEquipment: ["barbell", "dumbbell", "leverageMachine", "bodyweight", "cable"],
   },
+  stairClimber: { targetMuscles: [], synergistMuscles: [], sortedEquipment: ["leverageMachine"], bodyParts: [] },
+  otherCardio: { targetMuscles: [], synergistMuscles: [], sortedEquipment: ["leverageMachine"], bodyParts: [] },
   stationaryBike: {
     targetMuscles: [],
     synergistMuscles: ["Quadriceps", "Hamstrings", "Gluteus Maximus", "Gastrocnemius", "Soleus"],

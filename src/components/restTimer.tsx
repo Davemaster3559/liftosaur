@@ -17,7 +17,7 @@ import { Text } from "./primitives/text";
 import { TimeUtils_formatMMSS } from "../utils/time";
 import { StringUtils_pad } from "../utils/string";
 import { IDispatch } from "../ducks/types";
-import { Thunk_playAudioNotification, Thunk_updateTimer, Thunk_checkSetTimer } from "../ducks/thunks";
+import { Thunk_updateTimer, Thunk_checkSetTimer, Thunk_skipRest } from "../ducks/thunks";
 import { IconTrash } from "./icons/iconTrash";
 import { IconBack } from "./icons/iconBack";
 import { IHistoryRecord, ISettings, ISubscription } from "../types";
@@ -26,12 +26,7 @@ import { Progress_getCurrentProgress } from "../models/progress";
 import { useTrackClick } from "../utils/clickTracking";
 import { useRem, useRemScale } from "../utils/useRem";
 import { TEXT_SIZE_MAX } from "../models/settings";
-import {
-  IRestTimerNotice,
-  RestTimerProgress_at,
-  RestTimerProgress_context,
-  RestTimerProgress_notice,
-} from "../models/restTimerProgress";
+import { RestTimerProgress_at } from "../models/restTimerProgress";
 import { History_clockNow, History_pauseTime } from "../models/history";
 import { Tailwind_colors } from "../utils/tailwindConfig";
 import { RestTimerWidth_em } from "../models/restTimerWidth";
@@ -96,7 +91,6 @@ const shadowStyle = Platform.select({
 });
 
 export function RestTimer(props: IProps): JSX.Element | null {
-  const notice = useRef<IRestTimerNotice>({});
   const [isExpanded, setIsExpanded] = useState(false);
   const trackClick = useTrackClick();
   const insets = useSafeAreaInsets();
@@ -139,25 +133,6 @@ export function RestTimer(props: IProps): JSX.Element | null {
   useRestTimerTick(timerSince != null && pausedAt == null);
   const progressStyle = useRestTimerProgressStyle(timerSince, timer, pausedAt);
 
-  useEffect(() => {
-    const time =
-      timerSince != null && timer != null
-        ? RestTimerProgress_at(timerSince, timer, History_clockNow(progress))
-        : undefined;
-    const result = RestTimerProgress_notice(
-      notice.current,
-      RestTimerProgress_context(progress, props.settings).key,
-      time,
-      timer,
-      pausedAt != null,
-      !!progress.ui?.nativeNotificationScheduled
-    );
-    notice.current = result.state;
-    if (result.notify) {
-      props.dispatch(Thunk_playAudioNotification());
-    }
-  });
-
   // The corner rest timer shows the rest for `auto` timed sets. Poll the model each tick so it advances
   // to the next set's work window when the rest expires; a cheap no-op otherwise (Progress_checkSetTimer).
   useEffect(() => {
@@ -172,8 +147,11 @@ export function RestTimer(props: IProps): JSX.Element | null {
   }
   const pointerEventsMode = hideTimer ? "none" : "box-none";
 
-  const { elapsedMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, History_clockNow(progress));
-  const elapsedText = TimeUtils_formatMMSS(elapsedMs);
+  const { remainingMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, History_clockNow(progress));
+  if (isTimeOut) {
+    return null;
+  }
+  const elapsedText = TimeUtils_formatMMSS(remainingMs);
   const bgClass = isTimeOut ? "bg-background-darkred" : "bg-background-darkgray";
   const totalColorClass = isTimeOut ? "text-white" : "text-gray-300";
   const nextEntryAndSetIndex =
@@ -189,7 +167,13 @@ export function RestTimer(props: IProps): JSX.Element | null {
         onPress={() => {
           trackClick("rest-timer-minus");
           props.dispatch(
-            Thunk_updateTimer(timer - 15, nextEntryAndSetIndex?.entryIndex, nextEntryAndSetIndex?.setIndex, false)
+            Thunk_updateTimer(
+              timer - 15,
+              nextEntryAndSetIndex?.entryIndex,
+              nextEntryAndSetIndex?.setIndex,
+              false,
+              progress.devfitRestEvent
+            )
           );
         }}
       >
@@ -204,7 +188,7 @@ export function RestTimer(props: IProps): JSX.Element | null {
         className="relative items-center justify-center min-w-scaled-10 min-h-scaled-10"
         onPress={() => {
           trackClick("rest-timer-cancel");
-          props.dispatch({ type: "StopTimer" });
+          props.dispatch(Thunk_skipRest(progress.devfitRestEvent));
         }}
       >
         <View className="absolute inset-0 rounded-lg bg-background-default" style={{ opacity: 0.2 }} />
@@ -251,7 +235,13 @@ export function RestTimer(props: IProps): JSX.Element | null {
         onPress={() => {
           trackClick("rest-timer-plus");
           props.dispatch(
-            Thunk_updateTimer(timer + 15, nextEntryAndSetIndex?.entryIndex, nextEntryAndSetIndex?.setIndex, false)
+            Thunk_updateTimer(
+              timer + 15,
+              nextEntryAndSetIndex?.entryIndex,
+              nextEntryAndSetIndex?.setIndex,
+              false,
+              progress.devfitRestEvent
+            )
           );
         }}
       >
@@ -352,7 +342,10 @@ export function KeyboardRestTimer(): JSX.Element | null {
   if (timer == null || timerSince == null) {
     return null;
   }
-  const { elapsedMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, pausedAt ?? Date.now());
+  const { remainingMs, isTimeOut } = RestTimerProgress_at(timerSince, timer, pausedAt ?? Date.now());
+  if (isTimeOut) {
+    return null;
+  }
   return (
     <View pointerEvents="none" className="items-center absolute left-0 right-0 bottom-full mb-1">
       <Text
@@ -361,7 +354,7 @@ export function KeyboardRestTimer(): JSX.Element | null {
         numberOfLines={1}
         className={`text-xs font-bold ${isTimeOut ? "text-text-error" : "text-text-secondary"}`}
       >
-        {RestTimer_formatCompact(elapsedMs)} /{RestTimer_formatCompact(timer * 1000)}
+        Rest · {RestTimer_formatCompact(remainingMs)} remaining
       </Text>
     </View>
   );

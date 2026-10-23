@@ -39,9 +39,8 @@ class LiftosaurTimerModule(reactContext: ReactApplicationContext) :
         val name = ctx.getString(R.string.channel_name)
         val description = ctx.getString(R.string.channel_description)
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
             .build()
         val soundUri: Uri = Uri.parse("android.resource://${ctx.packageName}/raw/notif")
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -96,7 +95,10 @@ class LiftosaurTimerModule(reactContext: ReactApplicationContext) :
                 titleVal,
                 subtitleVal,
                 bodyVal,
-                volume
+                volume,
+                if (params.hasKey("eventId")) params.getString("eventId") else null,
+                if (params.hasKey("deadline")) params.getDouble("deadline").toLong() else null,
+                if (params.hasKey("eventRevision")) params.getDouble("eventRevision").toLong() else 0
             )
             android.util.Log.d("LftTimer", "Android Notification.send result missing=$missing")
             val result = Arguments.createMap().apply {
@@ -110,9 +112,9 @@ class LiftosaurTimerModule(reactContext: ReactApplicationContext) :
         }
     }
 
-    override fun stopTimer(promise: Promise) {
+    override fun stopTimer(eventId: String?, eventRevision: Double?, promise: Promise) {
         try {
-            Notification(reactApplicationContext).cancel(Notification.REST_TIMER_ID)
+            Notification(reactApplicationContext).cancel(Notification.REST_TIMER_ID, eventId, eventRevision?.toLong())
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("stop_timer_failed", e.message, e)
@@ -157,8 +159,10 @@ class LiftosaurTimerModule(reactContext: ReactApplicationContext) :
         }
     }
 
-    override fun playSound(volume: Double, vibration: Boolean, sound: String, promise: Promise) {
+    override fun playSound(volume: Double, vibration: Boolean, sound: String, ignoreDoNotDisturb: Boolean, promise: Promise) {
         try {
+            val manager = reactApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!ignoreDoNotDisturb && manager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL) { promise.resolve(null); return }
             if (volume <= 0 && !vibration) {
                 promise.resolve(null)
                 return
@@ -187,7 +191,7 @@ class LiftosaurTimerModule(reactContext: ReactApplicationContext) :
             try {
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setUsage(if (ignoreDoNotDisturb) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
